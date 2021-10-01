@@ -85,7 +85,7 @@ There's a couple of environment variables that need to be set:
 1. `cd $SRC`
 2. `.\devops\env\dev_env.ps1`
 3. `$env:CMAKE_TOOLCHAIN_FILE="$VCPKG\scripts\buildsystems\vcpkg.cmake"; cargo build --bin squadov_api_server`
-4. `$env:FFMPEG_BINARY_PATH="C:\Users\Littl\Git\SquadOVClient\prebuilt\ffmpeg\bin\ffmpeg.exe"; cargo run --bin squadov_api_server -- --config .\config\config.toml`
+4. `$env:FFMPEG_BINARY_PATH="$SquadOVClient\prebuilt\ffmpeg\bin\ffmpeg.exe"; cargo run --bin squadov_api_server -- --config .\config\config.toml`
 
 ### AWS
 1. Generate an Access Key in AWS IAM Credentials
