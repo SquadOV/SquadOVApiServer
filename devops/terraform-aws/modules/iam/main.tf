@@ -1,9 +1,9 @@
 resource "aws_iam_user" "api_user" {
-    name = "squadov-api-user"
+    name = "squadov-api-${var.user}-${var.environment}"
 }
 
 resource "aws_iam_policy" "s3_policy" {
-    name = "squadov-s3-policy"
+    name = "squadov-s3-policy-${var.user}-${var.environment}"
     description = "Policy to allow API server to do required tasks in S3."
 
     policy = <<EOF

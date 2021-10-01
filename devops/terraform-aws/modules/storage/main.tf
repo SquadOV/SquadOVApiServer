@@ -11,7 +11,7 @@ resource "aws_cloudfront_origin_access_identity" "public_vod_access_identity" {
 }
 
 resource "aws_s3_bucket" "vod_storage_bucket" {
-    bucket = "squadov-us-vod-bucket${var.bucket_suffix}"
+    bucket = "squadov-us-vod-bucket-${var.user}-${var.environment}"
     acl = "private"
 
     lifecycle_rule {
@@ -99,7 +99,7 @@ resource "aws_s3_bucket_policy" "vod_bucket_policy" {
 }
 
 resource "aws_s3_bucket" "blob_storage_bucket" {
-    bucket = "squadov-us-blob-bucket${var.bucket_suffix}"
+    bucket = "squadov-us-blob-bucket-${var.user}-${var.environment}"
     acl = "private"
 
     lifecycle_rule {
@@ -166,12 +166,12 @@ resource "aws_s3_bucket_policy" "blob_bucket_policy" {
 }
 
 resource "aws_cloudfront_public_key" "private_s3_vod_cloudfront_public_key" {
-    name = "private-s3-vod-cloudfront-public-key"
-    encoded_key = file("../../aws/keys/private_s3_vod_cloudfront_PUBLIC_KEY.pem")
+    name = "private-s3-vod-cloudfront-${var.user}-public-key"
+    encoded_key = file("../../aws/keys/private_s3_vod_cloudfront_steven_PUBLIC_KEY.pem")
 }
 
 resource "aws_cloudfront_key_group" "private_s3_vod_cloudfront_key_group" {
-    name = "private-s3-vod-cloudfront-key-group"
+    name = "private-s3-vod-cloudfront-${var.user}-key-group"
     items = [ aws_cloudfront_public_key.private_s3_vod_cloudfront_public_key.id ]
 }
 

@@ -58,7 +58,7 @@ impl crate::api::ApiApplication {
             super::Match,
             "
             INSERT INTO squadov.matches (uuid, game)
-            SELECT gen_random_uuid(), $2
+            SELECT squadov.gen_random_uuid(), $2
             FROM generate_series(1, $1)
             RETURNING uuid
             ",

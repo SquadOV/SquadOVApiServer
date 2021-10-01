@@ -1,3 +1,7 @@
-variable "bucket_suffix" {
+variable "environment" {
+    type = string
+}
+
+variable "user" {
     type = string
 }

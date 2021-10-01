@@ -455,7 +455,7 @@ impl api::ApiApplication {
                     build_version
                 )
                 VALUES (
-                    gen_random_uuid(),
+                    squadov.gen_random_uuid(),
                     $1,
                     $2,
                     $3,

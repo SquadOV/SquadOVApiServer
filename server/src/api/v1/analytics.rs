@@ -82,7 +82,7 @@ impl api::ApiApplication {
                     tm
                 )
                 VALUES (
-                    gen_random_uuid(),
+                    squadov.gen_random_uuid(),
                     $1,
                     '',
                     $2,

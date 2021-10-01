@@ -282,7 +282,7 @@ impl api::ApiApplication {
                 )
                 SELECT slug AS "slug!"
                 FROM realms
-                ORDER BY LEVENSHTEIN(name, $2) ASC
+                ORDER BY squadov.LEVENSHTEIN(name, $2) ASC
                 LIMIT 1
                 "#,
                 realm_id,

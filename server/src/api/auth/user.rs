@@ -104,7 +104,7 @@ impl UserManager {
                 verified,
                 local_encryption_key
             )
-            SELECT $1, $2, $3, encode(digest(gen_random_bytes(16), 'sha256'), 'base64')
+            SELECT $1, $2, $3, encode(squadov.digest(squadov.gen_random_bytes(16), 'sha256'), 'base64')
             RETURNING
                 id,
                 username,
