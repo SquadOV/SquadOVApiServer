@@ -4,6 +4,7 @@ resource "aws_vpc" "primary" {
 
     enable_dns_support = true
     enable_dns_hostnames = true
+    assign_generated_ipv6_cidr_block = true
 }
 
 resource "aws_internet_gateway" "primary_gateway" {
@@ -15,6 +16,7 @@ resource "aws_subnet" "database_subnet_a" {
     availability_zone = "us-east-2a"
     cidr_block = "10.0.0.0/28"
     map_public_ip_on_launch = true
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_subnet" "database_subnet_c" {
@@ -22,6 +24,7 @@ resource "aws_subnet" "database_subnet_c" {
     availability_zone = "us-east-2c"
     cidr_block = "10.0.0.32/28"
     map_public_ip_on_launch = true
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_security_group" "database_security_group" {
@@ -51,18 +54,21 @@ resource "aws_subnet" "k8s_subnet_private_a" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2a"
     cidr_block = "10.0.1.0/28"
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_subnet" "k8s_subnet_private_c" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2c"
     cidr_block = "10.0.1.32/28"
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_subnet" "k8s_subnet_public_a" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2a"
     cidr_block = "10.0.2.0/28"
+    assign_ipv6_address_on_creation = true
     
     tags = {
         "kubernetes.io/cluster/primary-eks-cluster" = "shared"
@@ -74,6 +80,7 @@ resource "aws_subnet" "k8s_subnet_public_c" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2c"
     cidr_block = "10.0.2.32/28"
+    assign_ipv6_address_on_creation = true
     
     tags = {
         "kubernetes.io/cluster/primary-eks-cluster" = "shared"
@@ -110,12 +117,14 @@ resource "aws_subnet" "fargate_subnet_private_a" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2a"
     cidr_block = "10.0.16.0/24"
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_subnet" "fargate_subnet_private_c" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2c"
     cidr_block = "10.0.48.0/24"
+    assign_ipv6_address_on_creation = true
 }
 
 resource "aws_route_table" "public_route_table" {
@@ -123,6 +132,11 @@ resource "aws_route_table" "public_route_table" {
 
     route {
         cidr_block = "0.0.0.0/0"
+        gateway_id = aws_internet_gateway.primary_gateway.id
+    }
+
+    route {
+        ipv6_cidr_block = "::/0"
         gateway_id = aws_internet_gateway.primary_gateway.id
     }
 }
@@ -160,6 +174,11 @@ resource "aws_route_table" "private_route_table_a" {
         cidr_block = "0.0.0.0/0"
         nat_gateway_id = aws_nat_gateway.primary_nat_a.id
     }
+
+    route {
+        ipv6_cidr_block = "::/0"
+        nat_gateway_id = aws_nat_gateway.primary_nat_a.id
+    }
 }
 
 resource "aws_route_table" "private_route_table_c" {
@@ -167,6 +186,11 @@ resource "aws_route_table" "private_route_table_c" {
 
     route {
         cidr_block = "0.0.0.0/0"
+        nat_gateway_id = aws_nat_gateway.primary_nat_c.id
+    }
+
+    route {
+        ipv6_cidr_block = "::/0"
         nat_gateway_id = aws_nat_gateway.primary_nat_c.id
     }
 }
