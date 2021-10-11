@@ -83,25 +83,23 @@ impl super::AccessChecker<ShareTokenMetadata> for ShareTokenAccessRestricter {
             // Otherwise, we use the bulk option and it just must be in the array.
             let path_video_uuid = video_uuid.parse::<Uuid>()?;
             if let Some(share_uuid) = share_token.video_uuid.as_ref() {
-                if &path_video_uuid != share_uuid {
-                    return Ok(false);
+                if &path_video_uuid == share_uuid {
+                    granted_access = true;                    
                 }
-
-                granted_access = true;
-            } else {
-                let mut found = false;
+            } 
+            
+            if !granted_access {
                 for share_uuid in &share_token.bulk_video_uuids {
                     if &path_video_uuid == share_uuid {
-                        found = true;
+                        granted_access = true;
                         break;
                     }
                 }
+            }
 
-                if !found {
-                    return Ok(false);
-                }
-
-                granted_access = true;
+            if !granted_access {
+                // At least one of the two checks above need to pass.
+                return Ok(false);
             }
         }
 
