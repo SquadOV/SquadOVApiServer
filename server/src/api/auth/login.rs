@@ -85,7 +85,7 @@ impl api::ApiApplication {
                     let mut tx = self.pool.begin().await?;
                     self.create_default_squad(&mut tx, &user).await?;
 
-                    // Is it a bad idea to link the user ID...? Maybe?
+                    // Is it a bad idea to expose the user ID in the default link...? Maybe?
                     profile::create_user_profile_for_user_id(&mut tx, user.id, &format!("{}-{}", petname::Petnames::large().generate_one(3, "-").to_case(Case::Pascal), user.id)).await?;
                     tx.commit().await?;
 
