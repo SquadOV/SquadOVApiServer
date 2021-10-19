@@ -635,21 +635,26 @@ pub fn parse_advanced_cvars_and_event_from_wow_combat_log(state: &WoWCombatLogSt
             "UNIT_DIED" => Ok((None, WoWCombatLogEventType::UnitDied{
                 unconcious: if cl_version == 9 { false } else { payload.parts[9] == "1" },
             }, None)),
-            "SWING_DAMAGE_LANDED" => Ok({
-                let mut idx = 9;
-                let advanced = if state.advanced_log {
-                    Some(WoWCombatLogAdvancedCVars::new(&payload.parts[idx..idx+advanced_cvar_offset], false)?)
-                } else {
-                    None
-                };
-                idx += advanced_cvar_offset;
+            "SWING_DAMAGE_LANDED" => if payload.parts.len() >= 9 {
+                Ok({
+                    let mut idx = 9;
+                    let advanced = if state.advanced_log {
+                        Some(WoWCombatLogAdvancedCVars::new(&payload.parts[idx..idx+advanced_cvar_offset], false)?)
+                    } else {
+                        None
+                    };
+                    idx += advanced_cvar_offset;
 
-                (advanced, WoWCombatLogEventType::DamageDone{
-                    damage: WoWDamageType::SwingDamage,
-                    amount: payload.parts[idx].parse()?,
-                    overkill: payload.parts[idx+1].parse()?,
-                }, None)
-            }),
+                    (advanced, WoWCombatLogEventType::DamageDone{
+                        damage: WoWDamageType::SwingDamage,
+                        amount: payload.parts[idx].parse()?,
+                        overkill: payload.parts[idx+1].parse()?,
+                    }, None)
+                })
+            } else {
+                log::warn!("Bad SWING_DAMAGE_LANDED line: {} - {} @ {}", payload.flatten(), payload.parts.len(), cl_version);
+                Ok((None, WoWCombatLogEventType::Unknown, None))
+            },
             "COMBATANT_INFO" =>  if cl_version == 9 && payload.parts.len() >= 31 {
                 Ok((None, WoWCombatLogEventType::CombatantInfo{
                     guid: payload.parts[1].clone(),
