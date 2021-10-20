@@ -4,12 +4,13 @@ use crate::api::auth::SquadOVSession;
 use std::sync::Arc;
 use squadov_common::{
     SquadOvError,
+    SquadOvWowRelease,
+    games,
     WoWCharacter,
     WowFullCharacter,
     WowCovenant,
     WowItem,
     WoWCharacterUserAssociation,
-    wow::WowRelease,
 };
 use uuid::Uuid;
 use serde::Deserialize;
@@ -156,7 +157,7 @@ impl api::ApiApplication {
 
     }
 
-    async fn list_wow_characters_for_user(&self, user_id: i64, release: WowRelease) -> Result<Vec<WoWCharacter>, SquadOvError> {
+    async fn list_wow_characters_for_user(&self, user_id: i64, release: SquadOvWowRelease) -> Result<Vec<WoWCharacter>, SquadOvError> {
         // We can afford to only list combatant info-validated here as we expect the issue where combatant info doesn't show up
         // to be a rare occurence.
         Ok(
@@ -184,11 +185,7 @@ impl api::ApiApplication {
                 GROUP BY wucc.unit_guid, wcp.unit_name, wvc.spec_id, wvc.team, wvc.rating, wvc.class_id
                 "#,
                 user_id,
-                match release {
-                    WowRelease::Retail => "9.%",
-                    WowRelease::Tbc => "2.%",
-                    WowRelease::Vanilla => "1.%",
-                },
+                games::wow_release_to_db_build_expression(release),
             )
                 .fetch_all(&*self.heavy_pool)
                 .await?
@@ -378,7 +375,7 @@ impl api::ApiApplication {
 
 #[derive(Deserialize)]
 pub struct CharactersForUserQuery {
-    release: WowRelease
+    release: SquadOvWowRelease
 }
 
 pub async fn list_wow_characters_for_user_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWUserPath>, query: web::Query<CharactersForUserQuery>) -> Result<HttpResponse, SquadOvError> {
