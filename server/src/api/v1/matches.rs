@@ -8,6 +8,8 @@ use actix_web::{web, HttpResponse, HttpRequest};
 use squadov_common::{
     SquadOvError,
     SquadOvGames,
+    SquadOvWowRelease,
+    games,
     matches::{RecentMatch, BaseRecentMatch, MatchPlayerPair},
     aimlab::AimlabTask,
     riot::db as riot_db,
@@ -89,6 +91,7 @@ pub struct RawRecentMatchData {
 #[serde(rename_all="camelCase")]
 pub struct RecentMatchQuery {
     pub games: Option<Vec<SquadOvGames>>,
+    pub wow_releases: Option<Vec<SquadOvWowRelease>>,
     pub squads: Option<Vec<i64>>,
     pub users: Option<Vec<i64>>,
     pub time_start: Option<i64>,
@@ -189,6 +192,18 @@ impl api::ApiApplication {
     }
 
     async fn get_recent_base_matches_for_user(&self, user_id: i64, start: i64, end: i64, filter: &RecentMatchQuery, needs_profile: bool) -> Result<Vec<RawRecentMatchData>, SquadOvError> {
+        let wow_release_filters = if let Some(games) = filter.games.as_ref() {
+            if games.contains(&SquadOvGames::WorldOfWarcraft) {
+                filter.wow_releases.as_ref().unwrap_or(&vec![]).iter().map(|x| {
+                    String::from(games::wow_release_to_db_build_expression(*x))
+                }).collect::<Vec<String>>()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        };
+
         let handles: Vec<RecentMatchHandle> = sqlx::query!(
             r#"
             SELECT DISTINCT v.match_uuid AS "match_uuid!", v.user_uuid AS "uuid!", v.end_time
@@ -220,6 +235,9 @@ impl api::ApiApplication {
             LEFT JOIN squadov.user_profile_vods AS upv
                 ON upv.video_uuid = v.video_uuid
                     AND upv.user_id = u.id
+            LEFT JOIN squadov.wow_match_view AS wmv
+                ON wmv.match_uuid = v.match_uuid
+                    AND wmv.user_id = u.id
             WHERE u.id = $1
                 AND v.match_uuid IS NOT NULL
                 AND v.user_uuid IS NOT NULL
@@ -234,6 +252,7 @@ impl api::ApiApplication {
                 AND v.is_clip = FALSE
                 AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 AND (NOT $12::BOOLEAN OR upv.video_uuid IS NOT NULL)
+                AND (CARDINALITY($13::VARCHAR[]) = 0 OR wmv.build_version LIKE ANY ($13))
             ORDER BY v.end_time DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -255,6 +274,7 @@ impl api::ApiApplication {
             filter.only_watchlist,
             &filter.vods.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<Uuid>>(),
             needs_profile,
+            &wow_release_filters,
         )
             .fetch_all(&*self.pool)
             .await?
@@ -534,6 +554,7 @@ pub async fn get_vod_recent_match_handler(app : web::Data<Arc<api::ApiApplicatio
 
     let raw_base_matches = app.get_recent_base_matches_for_user(session.user.id, 0, 1, &RecentMatchQuery{
         games: None,
+        wow_releases: None,
         squads: None,
         users: None,
         time_start: None,
