@@ -2,12 +2,16 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use serde::{Serialize, Deserialize};
 use crate::api;
 use crate::api::fusionauth;
-use squadov_common::SquadOvError;
+use squadov_common::{
+    SquadOvError,
+    profile,
+};
 use crate::api::auth::SquadOVSession;
 use crate::logged_error;
 use uuid::Uuid;
 use std::sync::Arc;
 use chrono::{DateTime, Utc, NaiveDateTime};
+use convert_case::{Case, Casing};
 
 #[derive(Deserialize)]
 pub struct LoginData {
@@ -77,10 +81,18 @@ impl api::ApiApplication {
                     // Check for any pending squad invites and apply them.
                     self.associate_pending_invites_to_user(&user.email, user.id).await?;
 
-                    // Create a default squad for this user. Hard code adding me and Derek as members of this squad
-                    // to give it a sort of Myspace Tom feel.
+                    // Create a default squad for this user and create their default profile using a slug created from their username.
                     let mut tx = self.pool.begin().await?;
                     self.create_default_squad(&mut tx, &user).await?;
+                    profile::create_user_profile_for_user_id(
+                        &mut tx,
+                        user.id,
+                        &format!(
+                            "{}-{}",
+                            petname::Petnames::large().generate_one(3, "-").to_case(Case::Pascal),
+                            user.uuid.to_hyphenated().to_string().split("-").collect::<Vec<&str>>()[0],
+                        ),
+                    ).await?;
                     tx.commit().await?;
 
                     user
