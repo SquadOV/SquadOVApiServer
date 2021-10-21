@@ -51,6 +51,14 @@ pub struct WowListQuery {
     dungeons: Option<Vec<i32>>,
     arenas: Option<Vec<i32>>,
     brackets: Option<Vec<String>>,
+    rating_low: Option<i32>,
+    rating_high: Option<i32>,
+    friendly_composition: Option<Vec<String>>,
+    enemy_composition: Option<Vec<String>>,
+    pov_spec: Option<Vec<i32>>,
+    encounter_difficulties: Option<Vec<i32>>,
+    keystone_low: Option<i32>,
+    keystone_high: Option<i32>,
     // If not set, wins + losses. If true, only wins. If false, only losses.
     is_winner: Option<bool>,
 }
