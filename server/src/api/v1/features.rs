@@ -24,7 +24,7 @@ impl Default for FeatureFlags {
             max_record_fps: 60,
             allow_record_upload: true,
             allow_wow_combat_log_upload: true,
-            enable_user_profiles: false,
+            enable_user_profiles: true,
             disable_sentry: false,
         }
     }
