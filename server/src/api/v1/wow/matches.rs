@@ -63,6 +63,47 @@ pub struct WowListQuery {
     is_winner: Option<bool>,
 }
 
+impl WowListQuery {
+    pub fn build_friendly_composition_filter(&self) -> Result<String, SquadOvError> {
+        WowListQuery::build_composition_filter(self.friendly_composition.as_ref())
+    }
+
+    pub fn build_enemy_composition_filter(&self) -> Result<String, SquadOvError> {
+        WowListQuery::build_composition_filter(self.enemy_composition.as_ref())
+    }
+
+    fn build_composition_filter(f: Option<&Vec<String>>) -> Result<String, SquadOvError> {
+        Ok(
+            if let Some(inner) = f {
+                let mut pieces: Vec<String> = vec![];
+                for x in inner {
+                    // Each string is going to be a JSON array of integers [1, 2, 3].
+                    let json_arr: Vec<i32> = serde_json::from_str(x)?;
+
+                    // It could be empty in which case we want to match anything.
+                    if json_arr.is_empty() {
+                        continue;
+                    }
+
+                    // Each JSON array needs to be converted into a regex lookahead group
+                    // that looks like: (?=.*,(1|2|3),)
+                    pieces.push(format!(
+                        "(?=.*,({}),)",
+                        json_arr.into_iter().map(|x| {
+                            format!("{}", x)
+                        })
+                            .collect::<Vec<String>>()
+                            .join("|")
+                    ));
+                }
+                format!("^{}.*$", pieces.join(""))
+            } else {
+                String::from(".*")
+            }
+        )
+    }
+}
+
 impl api::ApiApplication {
     async fn filter_valid_wow_match_player_pairs(&self, uuids: &[MatchPlayerPair]) -> Result<(Vec<Uuid>, Vec<i64>), SquadOvError> {
         let match_uuids = uuids.iter().map(|x| { x.match_uuid.clone() }).collect::<Vec<Uuid>>();
@@ -108,6 +149,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             INNER JOIN squadov.wow_match_view_character_presence AS wcp
                 ON wcp.view_id = wmv.id
+            INNER JOIN squadov.wow_match_view_combatants AS wvc
+                ON wvc.character_id = wcp.character_id
             INNER JOIN squadov.users AS u
                 ON u.id = wmv.user_id
             LEFT JOIN squadov.vods AS v
@@ -117,6 +160,17 @@ impl api::ApiApplication {
             LEFT JOIN squadov.view_share_connections_access_users AS sau
                 ON sau.match_uuid = wmv.match_uuid
                     AND sau.user_id = $8
+            CROSS JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS specs(s)
             WHERE wmv.user_id = $2
                 AND wcp.unit_guid = $1
                 AND wmv.match_uuid IS NOT NULL
@@ -125,6 +179,9 @@ impl api::ApiApplication {
                 AND (NOT $7::BOOLEAN OR v.video_uuid IS NOT NULL)
                 AND ($2 = $8 OR sau.match_uuid IS NOT NULL)
                 AND ($9::BOOLEAN IS NULL OR wav.success = $9)
+                AND (CARDINALITY($10::INTEGER[]) = 0 OR wav.difficulty = ANY($10))
+                AND (CARDINALITY($11::INTEGER[]) = 0 OR wvc.spec_id = ANY($11))
+                AND specs.s ~ $12
             ORDER BY wmv.start_tm DESC, wmv.match_uuid, u.uuid
             LIMIT $3 OFFSET $4
             "#,
@@ -137,6 +194,9 @@ impl api::ApiApplication {
             filters.has_vod.unwrap_or(false),
             req_user_id,
             filters.is_winner,
+            &filters.encounter_difficulties.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filters.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filters.build_friendly_composition_filter()?,
         )
             .fetch_all(&*self.heavy_pool)
             .await?
@@ -195,6 +255,7 @@ impl api::ApiApplication {
     }
 
     async fn list_wow_challenges_for_character(&self, character_guid: &str, user_id: i64, req_user_id: i64, start: i64, end: i64, filters: &WowListQuery) -> Result<Vec<WoWChallenge>, SquadOvError> {
+        log::info!("friendly comp filter: {}", filters.build_friendly_composition_filter()?);
         let pairs = sqlx::query!(
             r#"
             SELECT DISTINCT
@@ -206,8 +267,21 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             INNER JOIN squadov.wow_match_view_character_presence AS wcp
                 ON wcp.view_id = wmv.id
+            INNER JOIN squadov.wow_match_view_combatants AS wvc
+                ON wvc.character_id = wcp.character_id
             INNER JOIN squadov.users AS u
                 ON u.id = wmv.user_id
+            CROSS JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS specs(s)
             LEFT JOIN squadov.vods AS v
                 ON v.match_uuid = wmv.match_uuid
                     AND v.user_uuid = u.uuid
@@ -222,6 +296,10 @@ impl api::ApiApplication {
                 AND (NOT $6::BOOLEAN OR v.video_uuid IS NOT NULL)
                 AND ($2 = $7 OR sau.match_uuid IS NOT NULL)
                 AND ($8::BOOLEAN IS NULL OR wav.success = $8)
+                AND ($9::INTEGER IS NULL OR wav.keystone_level >= $9)
+                AND ($10::INTEGER IS NULL OR wav.keystone_level <= $10)
+                AND (CARDINALITY($11::INTEGER[]) = 0 OR wvc.spec_id = ANY($11))
+                AND specs.s ~ $12
             ORDER BY wmv.start_tm DESC, wmv.match_uuid, u.uuid
             LIMIT $3 OFFSET $4
             "#,
@@ -233,6 +311,10 @@ impl api::ApiApplication {
             filters.has_vod.unwrap_or(false),
             req_user_id,
             filters.is_winner,
+            filters.keystone_low,
+            filters.keystone_high,
+            &filters.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filters.build_friendly_composition_filter()?,
         )
             .fetch_all(&*self.heavy_pool)
             .await?
@@ -303,6 +385,30 @@ impl api::ApiApplication {
                 ON wcp.view_id = wmv.id
             INNER JOIN squadov.wow_match_view_combatants AS mvc
                 ON mvc.character_id = wcp.character_id
+            CROSS JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                        AND wvc.team = 0
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS t0(s)
+            CROSS JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                        AND wvc.team = 1
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS t1(s)
             INNER JOIN squadov.users AS u
                 ON u.id = wmv.user_id
             LEFT JOIN squadov.vods AS v
@@ -320,6 +426,14 @@ impl api::ApiApplication {
                 AND ($2 = $7 OR sau.match_uuid IS NOT NULL)
                 AND (CARDINALITY($8::VARCHAR[]) = 0 OR wav.arena_type = ANY($8))
                 AND ($9::BOOLEAN IS NULL OR ((wav.winning_team_id = mvc.team) = $9))
+                AND (CARDINALITY($10::INTEGER[]) = 0 OR mvc.spec_id = ANY($10))
+                AND ($11::INTEGER IS NULL OR mvc.rating >= $11)
+                AND ($12::INTEGER IS NULL OR mvc.rating <= $12)
+                AND (
+                    (t0.s ~ $13 AND t1.s ~ $14)
+                    OR
+                    (t0.s ~ $14 AND t1.s ~ $13)
+                )
             ORDER BY wmv.start_tm DESC, wmv.match_uuid, u.uuid
             LIMIT $3 OFFSET $4
             "#,
@@ -332,6 +446,11 @@ impl api::ApiApplication {
             req_user_id,
             &filters.brackets.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
             filters.is_winner,
+            &filters.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            filters.rating_low,
+            filters.rating_high,
+            &filters.build_friendly_composition_filter()?,
+            &filters.build_enemy_composition_filter()?,
         )
             .fetch_all(&*self.heavy_pool)
             .await?
