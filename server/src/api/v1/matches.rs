@@ -135,6 +135,22 @@ pub struct RecentMatchQuery {
     pub filters: RecentMatchGameQuery,
 }
 
+impl RecentMatchQuery {
+    pub fn get_wow_release_db_filter(&self) -> Vec<String> {
+        if let Some(games) = self.games.as_ref() {
+            if games.contains(&SquadOvGames::WorldOfWarcraft) {
+                self.wow_releases.as_ref().unwrap_or(&vec![]).iter().map(|x| {
+                    String::from(games::wow_release_to_db_build_expression(*x))
+                }).collect::<Vec<String>>()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    }
+}
+
 impl Default for RecentMatchQuery {
     fn default() -> Self {
         Self {
@@ -244,18 +260,6 @@ impl api::ApiApplication {
     }
 
     async fn get_recent_base_matches_for_user(&self, user_id: i64, start: i64, end: i64, filter: &RecentMatchQuery, needs_profile: bool) -> Result<Vec<RawRecentMatchData>, SquadOvError> {
-        let wow_release_filters = if let Some(games) = filter.games.as_ref() {
-            if games.contains(&SquadOvGames::WorldOfWarcraft) {
-                filter.wow_releases.as_ref().unwrap_or(&vec![]).iter().map(|x| {
-                    String::from(games::wow_release_to_db_build_expression(*x))
-                }).collect::<Vec<String>>()
-            } else {
-                vec![]
-            }
-        } else {
-            vec![]
-        };
-
         let handles: Vec<RecentMatchHandle> = sqlx::query!(
             r#"
             SELECT DISTINCT v.match_uuid AS "match_uuid!", v.user_uuid AS "uuid!", v.end_time
@@ -408,7 +412,7 @@ impl api::ApiApplication {
             filter.only_watchlist,
             &filter.vods.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<Uuid>>(),
             needs_profile,
-            &wow_release_filters,
+            &filter.get_wow_release_db_filter(),
             // Wow retail encounter filters
             &filter.filters.wow.encounters.raids.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
             &filter.filters.wow.encounters.encounters.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),

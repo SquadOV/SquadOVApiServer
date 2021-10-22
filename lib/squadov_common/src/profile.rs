@@ -193,7 +193,7 @@ pub async fn get_user_profile_basic_serialized_with_requester(ex: &PgPool, profi
             access_token: Some(AccessToken{
                 // Ideally we'd refresh this somehow instead of just granting access for such a large chunk of time.
                 expires: Some(Utc::now() + Duration::hours(6)),
-                methods: Some(vec![String::from("GET")]),
+                methods: Some(vec![String::from("GET"), String::from("POST")]),
                 paths: Some(vec![
                     format!("/profile/{}/matches", profile.user_id),
                     format!("/profile/{}/clips", profile.user_id),

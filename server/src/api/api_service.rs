@@ -122,7 +122,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                         )
                         .service(
                             web::scope("/clips")
-                                .route("", web::get().to(v1::get_profile_clips_handler))
+                                .route("", web::post().to(v1::get_profile_clips_handler))
                         )
                 )
         )
@@ -887,7 +887,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                 )
                 .service(
                     web::scope("/clip")
-                        .route("", web::get().to(v1::list_clips_for_user_handler))
+                        .route("", web::post().to(v1::list_clips_for_user_handler))
                         .route("/bulkDelete", web::post().to(v1::bulk_delete_vods_handler))
                         .service(
                             web::scope("/{clip_uuid}")
