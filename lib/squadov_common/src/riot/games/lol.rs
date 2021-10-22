@@ -32,7 +32,8 @@ pub struct LolMatchMetadataDto {
 pub struct LolMatchInfoDto {
     #[serde(deserialize_with="crate::parse_utc_time_from_milliseconds")]
     pub game_creation: Option<DateTime<Utc>>, // timestamp when champ select ended and loading screen appears
-    pub game_duration: i64, // seconds
+    pub game_duration: i64, // milliseconds or seconds depending on the game...
+    pub game_end_timestamp: Option<i64>,
     pub game_id: i64,
     pub game_mode: String,
     pub game_name: String,

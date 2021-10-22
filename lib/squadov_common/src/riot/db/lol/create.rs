@@ -493,8 +493,15 @@ pub async fn store_lol_match_info(ex: &mut Transaction<'_, Postgres>, match_uuid
         split[0],
         lol_match.info.queue_id,
         &lol_match.info.game_type,
-        // Old league API used to store game duration in seconds, new API gives in milliseconds.
-        lol_match.info.game_duration / 1000,
+        // Old league API used to store game duration in seconds, new API gives in milliseconds SOMETIMES.
+        // If 'gameEndTimestamp' exists in the data - then this value is seconds.
+        // If 'gameEndTimestamp' does not exist in the data - then this value is in milliseconds.
+        // ^ This is documented in Riot's match-v5 API documentation.
+        if lol_match.info.game_end_timestamp.is_some() {
+            lol_match.info.game_duration
+        } else {
+            lol_match.info.game_duration / 1000
+        },
         &lol_match.info.game_creation.ok_or(SquadOvError::BadRequest)?,
         0,
         &lol_match.info.game_version,
