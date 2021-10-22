@@ -45,22 +45,46 @@ pub struct GenericMatchFinishCreationRequest<T> {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all="camelCase")]
 pub struct WowListQuery {
-    has_vod: Option<bool>,
-    encounters: Option<Vec<i32>>,
-    raids: Option<Vec<i32>>,
-    dungeons: Option<Vec<i32>>,
-    arenas: Option<Vec<i32>>,
-    brackets: Option<Vec<String>>,
-    rating_low: Option<i32>,
-    rating_high: Option<i32>,
-    friendly_composition: Option<Vec<String>>,
-    enemy_composition: Option<Vec<String>>,
-    pov_spec: Option<Vec<i32>>,
-    encounter_difficulties: Option<Vec<i32>>,
-    keystone_low: Option<i32>,
-    keystone_high: Option<i32>,
+    pub has_vod: Option<bool>,
+    pub encounters: Option<Vec<i32>>,
+    pub raids: Option<Vec<i32>>,
+    pub dungeons: Option<Vec<i32>>,
+    pub arenas: Option<Vec<i32>>,
+    pub brackets: Option<Vec<String>>,
+    pub rating_low: Option<i32>,
+    pub rating_high: Option<i32>,
+    pub friendly_composition: Option<Vec<String>>,
+    pub enemy_composition: Option<Vec<String>>,
+    pub pov_spec: Option<Vec<i32>>,
+    pub encounter_difficulties: Option<Vec<i32>>,
+    pub keystone_low: Option<i32>,
+    pub keystone_high: Option<i32>,
     // If not set, wins + losses. If true, only wins. If false, only losses.
-    is_winner: Option<bool>,
+    pub is_winner: Option<bool>,
+    pub enabled: bool,
+}
+
+impl Default for WowListQuery {
+    fn default() -> Self {
+        Self {
+            has_vod: None,
+            encounters: None,
+            raids: None,
+            dungeons: None,
+            arenas: None,
+            brackets: None,
+            rating_low: None,
+            rating_high: None,
+            friendly_composition: None,
+            enemy_composition: None,
+            pov_spec: None,
+            encounter_difficulties: None,
+            keystone_low: None,
+            keystone_high: None,
+            is_winner: None,
+            enabled: true,
+        }
+    }
 }
 
 impl WowListQuery {
@@ -255,7 +279,6 @@ impl api::ApiApplication {
     }
 
     async fn list_wow_challenges_for_character(&self, character_guid: &str, user_id: i64, req_user_id: i64, start: i64, end: i64, filters: &WowListQuery) -> Result<Vec<WoWChallenge>, SquadOvError> {
-        log::info!("friendly comp filter: {}", filters.build_friendly_composition_filter()?);
         let pairs = sqlx::query!(
             r#"
             SELECT DISTINCT
