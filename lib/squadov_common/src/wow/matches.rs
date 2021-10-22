@@ -4,16 +4,6 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use sqlx::{Executor, Postgres};
 use super::WoWCombatLogState;
-use serde_repr::{Serialize_repr, Deserialize_repr};
-use num_enum::TryFromPrimitive;
-
-#[derive(Copy, Clone, Serialize_repr, Deserialize_repr, Debug, TryFromPrimitive, PartialEq, Eq, Hash)]
-#[repr(i32)]
-pub enum WowRelease {
-    Retail,
-    Vanilla,
-    Tbc
-}
 
 #[derive(Deserialize)]
 pub struct WoWEncounterStart {
