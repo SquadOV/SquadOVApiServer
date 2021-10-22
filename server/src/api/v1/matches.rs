@@ -57,6 +57,7 @@ use serde_qs::actix::QsQuery;
 use crate::api::v1::{
     FavoriteResponse,
     UserProfilePath,
+    wow::WowListQuery,
 };
 use std::convert::TryFrom;
 
@@ -89,6 +90,38 @@ pub struct RawRecentMatchData {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all="camelCase")]
+pub struct GenericWowQuery {
+    pub encounters: WowListQuery,
+    pub keystones: WowListQuery,
+    pub arenas: WowListQuery,
+}
+
+impl Default for GenericWowQuery {
+    fn default() -> Self {
+        Self {
+            encounters: WowListQuery::default(),
+            keystones: WowListQuery::default(),
+            arenas: WowListQuery::default(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct RecentMatchGameQuery {
+    pub wow: GenericWowQuery,
+}
+
+impl Default for RecentMatchGameQuery {
+    fn default() -> Self {
+        Self {
+            wow: GenericWowQuery::default(),
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
 pub struct RecentMatchQuery {
     pub games: Option<Vec<SquadOvGames>>,
     pub wow_releases: Option<Vec<SquadOvWowRelease>>,
@@ -99,7 +132,42 @@ pub struct RecentMatchQuery {
     pub only_favorite: bool,
     pub only_watchlist: bool,
     pub vods: Option<Vec<Uuid>>,
+    pub filters: RecentMatchGameQuery,
 }
+
+impl RecentMatchQuery {
+    pub fn get_wow_release_db_filter(&self) -> Vec<String> {
+        if let Some(games) = self.games.as_ref() {
+            if games.contains(&SquadOvGames::WorldOfWarcraft) {
+                self.wow_releases.as_ref().unwrap_or(&vec![]).iter().map(|x| {
+                    String::from(games::wow_release_to_db_build_expression(*x))
+                }).collect::<Vec<String>>()
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    }
+}
+
+impl Default for RecentMatchQuery {
+    fn default() -> Self {
+        Self {
+            games: None,
+            wow_releases: None,
+            squads: None,
+            users: None,
+            time_start: None,
+            time_end: None,
+            only_favorite: false,
+            only_watchlist: false,
+            vods: None,
+            filters: RecentMatchGameQuery::default(),
+        }
+    }
+}
+
 
 fn filter_recent_match_data_by_game(data: &[RawRecentMatchData], game: SquadOvGames) -> Vec<&RawRecentMatchData> {
     data
@@ -192,18 +260,6 @@ impl api::ApiApplication {
     }
 
     async fn get_recent_base_matches_for_user(&self, user_id: i64, start: i64, end: i64, filter: &RecentMatchQuery, needs_profile: bool) -> Result<Vec<RawRecentMatchData>, SquadOvError> {
-        let wow_release_filters = if let Some(games) = filter.games.as_ref() {
-            if games.contains(&SquadOvGames::WorldOfWarcraft) {
-                filter.wow_releases.as_ref().unwrap_or(&vec![]).iter().map(|x| {
-                    String::from(games::wow_release_to_db_build_expression(*x))
-                }).collect::<Vec<String>>()
-            } else {
-                vec![]
-            }
-        } else {
-            vec![]
-        };
-
         let handles: Vec<RecentMatchHandle> = sqlx::query!(
             r#"
             SELECT DISTINCT v.match_uuid AS "match_uuid!", v.user_uuid AS "uuid!", v.end_time
@@ -238,6 +294,49 @@ impl api::ApiApplication {
             LEFT JOIN squadov.wow_match_view AS wmv
                 ON wmv.match_uuid = v.match_uuid
                     AND wmv.user_id = u.id
+            LEFT JOIN squadov.wow_encounter_view AS wev
+                ON wev.view_id = wmv.id
+            LEFT JOIN squadov.wow_challenge_view AS wcv
+                ON wcv.view_id = wmv.id
+            LEFT JOIN squadov.wow_arena_view AS wav
+                ON wav.view_id = wmv.id
+            LEFT JOIN LATERAL (
+                SELECT wcp.character_id
+                FROM squadov.wow_match_view_character_presence AS wcp
+                INNER JOIN squadov.wow_user_character_cache AS wucc
+                    ON wucc.user_id = vu.id
+                        AND wucc.unit_guid = wcp.unit_guid
+                WHERE wcp.view_id = wmv.id
+            ) AS wcp
+                ON TRUE
+            LEFT JOIN squadov.wow_match_view_combatants AS wvc
+                ON wvc.character_id = wcp.character_id
+            LEFT JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                        AND wvc.team = 0
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS t0(s)
+                ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                FROM (
+                    SELECT MIN(wvc.spec_id)
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_match_view_combatants AS wvc
+                        ON wvc.character_id = wcp.character_id
+                    WHERE wcp.view_id = wmv.id
+                        AND wvc.team = 1
+                    GROUP BY wcp.view_id, wcp.unit_guid
+                ) sub(val)
+            ) AS t1(s)
+                ON TRUE
             WHERE u.id = $1
                 AND v.match_uuid IS NOT NULL
                 AND v.user_uuid IS NOT NULL
@@ -253,6 +352,45 @@ impl api::ApiApplication {
                 AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 AND (NOT $12::BOOLEAN OR upv.video_uuid IS NOT NULL)
                 AND (CARDINALITY($13::VARCHAR[]) = 0 OR wmv.build_version LIKE ANY ($13))
+                AND (wmv.id IS NULL OR wmv.build_version NOT LIKE '9.%' OR (
+                    wmv.build_version LIKE '9.%'
+                        AND ((
+                                wev.view_id IS NOT NULL
+                                    AND (CARDINALITY($14::INTEGER[]) = 0 OR wev.instance_id = ANY($14))
+                                    AND (CARDINALITY($15::INTEGER[]) = 0 OR wev.encounter_id = ANY($15))
+                                    AND ($16::BOOLEAN IS NULL OR wev.success = $16)
+                                    AND (CARDINALITY($17::INTEGER[]) = 0 OR wev.difficulty = ANY($17))
+                                    AND (CARDINALITY($18::INTEGER[]) = 0 OR wvc.spec_id = ANY($18))
+                                    AND (t0.s ~ $19 OR t1.s ~ $19)
+                                    AND $34
+                            )
+                            OR (
+                                wcv.view_id IS NOT NULL
+                                    AND (CARDINALITY($20::INTEGER[]) = 0 OR wcv.instance_id = ANY($20)) 
+                                    AND ($21::BOOLEAN IS NULL OR wcv.success = $21)
+                                    AND ($22::INTEGER IS NULL OR wcv.keystone_level >= $22)
+                                    AND ($23::INTEGER IS NULL OR wcv.keystone_level <= $23)
+                                    AND (CARDINALITY($24::INTEGER[]) = 0 OR wvc.spec_id = ANY($24))
+                                    AND (t0.s ~ $25 OR t1.s ~ $25)
+                                    AND $35
+                            )
+                            OR (
+                                wav.view_id IS NOT NULL
+                                    AND (CARDINALITY($26::INTEGER[]) = 0 OR wav.instance_id = ANY($26))
+                                    AND (CARDINALITY($27::VARCHAR[]) = 0 OR wav.arena_type = ANY($27))
+                                    AND ($28::BOOLEAN IS NULL OR ((wav.winning_team_id = wvc.team) = $28))
+                                    AND (CARDINALITY($29::INTEGER[]) = 0 OR wvc.spec_id = ANY($29))
+                                    AND ($30::INTEGER IS NULL OR wvc.rating >= $30)
+                                    AND ($31::INTEGER IS NULL OR wvc.rating <= $31)
+                                    AND (
+                                        (t0.s ~ $32 AND t1.s ~ $33)
+                                        OR
+                                        (t0.s ~ $33 AND t1.s ~ $32)
+                                    )
+                                    AND $36
+                            )
+                        )
+                ))
             ORDER BY v.end_time DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -274,15 +412,44 @@ impl api::ApiApplication {
             filter.only_watchlist,
             &filter.vods.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<Uuid>>(),
             needs_profile,
-            &wow_release_filters,
+            &filter.get_wow_release_db_filter(),
+            // Wow retail encounter filters
+            &filter.filters.wow.encounters.raids.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filter.filters.wow.encounters.encounters.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            filter.filters.wow.encounters.is_winner,
+            &filter.filters.wow.encounters.encounter_difficulties.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filter.filters.wow.encounters.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filter.filters.wow.encounters.build_friendly_composition_filter()?,
+            // Wow retail keystone filters
+            &filter.filters.wow.keystones.dungeons.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            filter.filters.wow.keystones.is_winner,
+            filter.filters.wow.keystones.keystone_low,
+            filter.filters.wow.keystones.keystone_high,
+            &filter.filters.wow.keystones.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filter.filters.wow.keystones.build_friendly_composition_filter()?,
+            // Wow retail arena filters
+            &filter.filters.wow.arenas.arenas.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            &filter.filters.wow.arenas.brackets.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            filter.filters.wow.arenas.is_winner,
+            &filter.filters.wow.arenas.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
+            filter.filters.wow.arenas.rating_low,
+            filter.filters.wow.arenas.rating_high,
+            &filter.filters.wow.arenas.build_friendly_composition_filter()?,
+            &filter.filters.wow.arenas.build_enemy_composition_filter()?,
+            // Wow game mode filter
+            &filter.filters.wow.encounters.enabled,
+            &filter.filters.wow.keystones.enabled,
+            &filter.filters.wow.arenas.enabled,
         )
             .fetch_all(&*self.pool)
             .await?
             .into_iter()
-            .map(|x| { RecentMatchHandle {
-                match_uuid: x.match_uuid,
-                user_uuid: x.uuid,
-             }})
+            .map(|x| {
+                RecentMatchHandle {
+                    match_uuid: x.match_uuid,
+                    user_uuid: x.uuid,
+                }
+            })
             .collect();
 
         Ok(self.get_recent_base_matches(&handles, user_id).await?)
@@ -553,15 +720,8 @@ pub async fn get_vod_recent_match_handler(app : web::Data<Arc<api::ApiApplicatio
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
 
     let raw_base_matches = app.get_recent_base_matches_for_user(session.user.id, 0, 1, &RecentMatchQuery{
-        games: None,
-        wow_releases: None,
-        squads: None,
-        users: None,
-        time_start: None,
-        time_end: None,
-        only_favorite: false,
-        only_watchlist: false,
         vods: Some(vec![path.video_uuid.clone()]),
+        ..RecentMatchQuery::default()
     }, false).await?;
     let matches = app.get_recent_matches_from_uuids(&raw_base_matches).await?;
 
@@ -572,7 +732,7 @@ pub async fn get_vod_recent_match_handler(app : web::Data<Arc<api::ApiApplicatio
     }
 }
 
-async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiApplication>>, req: &HttpRequest, query: QsQuery<api::PaginationParameters>, mut filter: QsQuery<RecentMatchQuery>, needs_access_tokens: bool) -> Result<HttpResponse, SquadOvError> {
+async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiApplication>>, req: &HttpRequest, query: QsQuery<api::PaginationParameters>, mut filter: web::Json<RecentMatchQuery>, needs_access_tokens: bool) -> Result<HttpResponse, SquadOvError> {
     if needs_access_tokens {
         filter.users = Some(vec![user_id]);
     }
@@ -593,7 +753,7 @@ async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiA
     Ok(HttpResponse::Ok().json(api::construct_hal_pagination_response(&matches, req, &query, expected_total == got_total)?)) 
 }
 
-pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: QsQuery<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
     let extensions = req.extensions();
     let session = match extensions.get::<SquadOVSession>() {
         Some(s) => s,
@@ -603,7 +763,7 @@ pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiAppli
     get_recent_matches_for_user(session.user.id, app, &req, query, filter, false).await
 }
 
-pub async fn get_profile_matches_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<UserProfilePath>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: QsQuery<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_profile_matches_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<UserProfilePath>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
     get_recent_matches_for_user(path.profile_id, app, &req, query, filter, true).await
 }
 
