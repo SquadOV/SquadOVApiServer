@@ -44,7 +44,7 @@ pub struct VodThumbnail {
     pub height: i32,
 }
 
-#[derive(Serialize,Deserialize, Clone)]
+#[derive(Serialize,Deserialize, Clone, Debug)]
 pub struct VodAssociation {
     #[serde(rename = "matchUuid")]
     pub match_uuid: Option<Uuid>,
