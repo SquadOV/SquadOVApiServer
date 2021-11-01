@@ -880,6 +880,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("", web::get().to(v1::get_vod_handler))
                                         .route("", web::post().to(v1::associate_vod_handler))
                                         .route("/assoc", web::get().to(v1::get_vod_association_handler))
+                                        .route("/fastify", web::get().to(v1::get_vod_fastify_status_handler))
                                         .route("/upload", web::get().to(v1::get_vod_upload_path_handler))
                                         .route("/match", web::get().to(v1::get_vod_recent_match_handler))
                                 )

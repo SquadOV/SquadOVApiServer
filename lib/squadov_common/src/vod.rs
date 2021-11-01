@@ -211,6 +211,7 @@ pub enum VodProcessingTask {
 #[async_trait]
 impl RabbitMqListener for VodProcessingInterface {
     async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
+        log::info!("Handle VOD Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
         let task: VodProcessingTask = serde_json::from_slice(data)?;
         match task {
             VodProcessingTask::Process{vod_uuid, id, session_id} => self.process_vod(
