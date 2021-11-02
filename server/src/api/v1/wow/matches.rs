@@ -12,8 +12,10 @@ use squadov_common::{
     WoWArena,
     WoWCombatantInfo,
     WoWCombatLogState,
+    WowInstanceData,
     matches::MatchPlayerPair,
     generate_combatants_key,
+    generate_combatants_hashed_array,
 };
 use actix_web::{web, HttpResponse, HttpRequest};
 use crate::api;
@@ -784,6 +786,21 @@ impl api::ApiApplication {
         Ok(uuid)
     }
 
+    pub async fn update_wow_challenge_view_uuid(&self, tx: &mut Transaction<'_, Postgres>, old_uuid: &Uuid, new_uuid: &Uuid) -> Result<(), SquadOvError> {
+        sqlx::query!(
+            "
+            UPDATE squadov.wow_challenge_view
+            SET view_id = $2
+            WHERE view_id = $1
+            ",
+            old_uuid,
+            new_uuid,
+        )
+            .execute(&mut *tx)
+            .await?;
+        Ok(())
+    }
+
     pub async fn find_existing_wow_challenge_match(&self, view_uuid: &Uuid, tm: &DateTime<Utc>, key: &str) -> Result<Option<Uuid>, SquadOvError> {
         Ok(
             sqlx::query!(
@@ -1002,6 +1019,143 @@ impl api::ApiApplication {
         
         Ok(())
     }
+
+    pub async fn create_wow_instance_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, game: &WowInstanceData, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
+        let uuid = self.create_generic_wow_match_view(&mut *tx, tm, user_id, cl).await?;
+        sqlx::query!(
+            "
+            INSERT INTO squadov.wow_instance_view (
+                view_id,
+                instance_id,
+                instance_name,
+                instance_type
+            )
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4
+            )
+            ",
+            &uuid,
+            game.id as i64,
+            &game.name,
+            game.instance_type as i32,
+        )
+            .execute(&mut *tx)
+            .await?;
+        Ok(uuid)
+    }
+
+    pub async fn find_existing_wow_instance_match(&self, view_uuid: &Uuid, tm: &DateTime<Utc>, players: &[i32]) -> Result<Option<Uuid>, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                "
+                SELECT match_uuid
+                FROM squadov.new_wow_instances AS wc
+                CROSS JOIN (
+                    SELECT wmv.start_tm, wcv.instance_id, wcv.instance_type
+                    FROM squadov.wow_match_view AS wmv
+                    INNER JOIN squadov.wow_instance_view AS wcv
+                        ON wcv.view_id = wmv.id
+                    WHERE wmv.id = $1
+                ) AS wmv(start_tm, instance_id, instance_type)
+                WHERE wc.tr && tstzrange(wmv.start_tm, $2, '[]')
+                    AND wc.instance_id = wmv.instance_id
+                    AND wc.instance_type = wmv.instance_type
+                    AND wc.players && $3::INTEGER[]
+                ",
+                view_uuid,
+                tm,
+                players,
+            )
+                .fetch_optional(&*self.pool)
+                .await?
+                .map(|x| {
+                    x.match_uuid
+                })
+        )
+    }
+
+    pub async fn update_wow_instance_match_players(&self, tx: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, players: &[i32]) -> Result<(), SquadOvError> {
+        sqlx::query!(
+            "
+            UPDATE squadov.new_wow_instances
+            SET players = players | $2::INTEGER[]
+            WHERE match_uuid = $1
+            ",
+            match_uuid,
+            players,
+        )
+            .execute(tx)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn finish_wow_instance_match(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid, match_uuid: &Uuid, tm: &DateTime<Utc>, players: &[i32]) -> Result<(), SquadOvError> {
+        sqlx::query!(
+            "
+            INSERT INTO squadov.new_wow_instances (
+                match_uuid,
+                tr,
+                instance_id,
+                instance_type,
+                players
+            )
+            SELECT
+                $1,
+                tstzrange(wmv.start_tm, $4, '[]'),
+                wav.instance_id,
+                wav.instance_type,
+                $2
+            FROM squadov.wow_match_view AS wmv
+            INNER JOIN squadov.wow_instance_view AS wav
+                ON wav.view_id = wmv.id
+            WHERE wmv.id = $3
+            ",
+            match_uuid,
+            players,
+            view_uuid,
+            tm,
+        )
+            .execute(&mut *tx)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_wow_instance_view(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid) -> Result<(), SquadOvError> {
+        // ONLY DELETE IT FROM wow_instance_view.
+        // NEVER EVER DELETE FROM wow_match_view PLEASE AND THANK YOU.
+        sqlx::query!(
+            "
+            DELETE FROM squadov.wow_instance_view
+            WHERE view_id = $1
+            ",
+            view_uuid,
+        )
+            .execute(tx)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn finish_wow_generic_match_view(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid, match_uuid: &Uuid, tm: &DateTime<Utc>) -> Result<(), SquadOvError> {
+        // Modify view to link to the new match and to update the end time as well.
+        sqlx::query!(
+            "
+            UPDATE squadov.wow_match_view
+            SET end_tm = $2,
+                match_uuid = $3
+            WHERE id = $1
+            ",
+            view_uuid,
+            tm,
+            match_uuid,
+        )
+            .execute(&mut *tx)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub async fn create_wow_encounter_match_handler(app : web::Data<Arc<api::ApiApplication>>, input_match: web::Json<GenericMatchCreationRequest<WoWEncounterStart>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
@@ -1072,6 +1226,81 @@ pub async fn finish_wow_encounter_handler(app : web::Data<Arc<api::ApiApplicatio
         return Ok(HttpResponse::Ok().json(match_uuid));
     }
     Err(SquadOvError::InternalError(String::from("Too many errors in finishing WoW encounter...Retry limit reached.")))
+}
+
+pub async fn create_wow_instance_match_handler(app : web::Data<Arc<api::ApiApplication>>, input_match: web::Json<GenericMatchCreationRequest<WowInstanceData>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::BadRequest)?;
+    let mut tx = app.pool.begin().await?;
+    let uuid = app.create_wow_instance_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(uuid))
+}
+
+pub async fn finish_wow_instance_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWViewPath>, data: web::Json<GenericMatchFinishCreationRequest<()>>) -> Result<HttpResponse, SquadOvError> {
+    let player_hashes = generate_combatants_hashed_array(&data.combatants)?;
+
+    for _i in 0i32..2 {
+        let mut tx = app.pool.begin().await?;
+
+        // There's a couple of things that we need to take care of here.
+        // 1) If an existing match exists note that we need to update the players array to ensure that the list of players
+        //    we have is fully up to date for this match.
+        //      a) In the case of another conflict on the update then we technically have two matches that exist
+        //         in the database that have disjoint sets of players in the same match with a single player
+        //         that overlaps between the two. I think this case is unlikely to ever happen so we can just
+        //         ignore it.
+        // 2) If an existing match doesn't exist then we just need to create it as per usual.
+        let match_uuid = match app.find_existing_wow_instance_match(&path.view_uuid, &data.timestamp, &player_hashes).await? {
+            Some(uuid) => {
+                match app.update_wow_instance_match_players(&mut tx, &uuid, &player_hashes).await {
+                    Ok(_) => (),
+                    Err(err) => log::warn!("Failed to update Wow instance match players: {:?}", err),
+                };
+
+                uuid
+            },
+            None => {
+                let new_match = app.create_new_match(&mut tx, SquadOvGames::WorldOfWarcraft).await?;
+                match app.finish_wow_instance_match(&mut tx, &path.view_uuid, &new_match.uuid, &data.timestamp, &player_hashes).await {
+                    Ok(_) => (),
+                    Err(err) => match err {
+                        SquadOvError::Duplicate => {
+                            // This indicates that the match UUID is INVALID because a match with the same
+                            // match ID already exists. Retry!
+                            log::warn!("Caught duplicate WoW instance...retrying!");
+                            continue;
+                        },
+                        _ => return Err(err)
+                    }
+                };
+                new_match.uuid
+            }
+        };
+        app.finish_wow_generic_match_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp).await?;
+        
+        tx.commit().await?;
+        return Ok(HttpResponse::Ok().json(match_uuid));
+    }
+    Err(SquadOvError::InternalError(String::from("Too many errors in finishing WoW instance...Retry limit reached.")))
+}
+
+pub async fn convert_wow_instance_to_keystone_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWViewPath>, input_match: web::Json<GenericMatchCreationRequest<WoWChallengeStart>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::BadRequest)?;
+
+    let mut tx = app.pool.begin().await?;
+    let uuid = app.create_wow_challenge_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+
+    // Pretty much the same thing as the normal thing where we create a keystone view but
+    // in this case we want to update the view to have the proper UUID specified in the path.
+    app.update_wow_challenge_view_uuid(&mut tx, &uuid, &path.view_uuid).await?;
+
+    // Also need to delete the old instance view since that's no longer necessary.
+    app.delete_wow_instance_view(&mut tx, &path.view_uuid).await?;
+
+    tx.commit().await?;
+    Ok(HttpResponse::Ok().json(&path.view_uuid))
 }
 
 pub async fn finish_wow_challenge_handler(app : web::Data<Arc<api::ApiApplication>>, data: web::Json<GenericMatchFinishCreationRequest<WoWChallengeEnd>>, path: web::Path<super::WoWViewPath>) -> Result<HttpResponse, SquadOvError> {

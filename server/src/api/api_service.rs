@@ -665,6 +665,18 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         )
                                 )
                                 .service(
+                                    web::scope("/instance")
+                                        .route("", web::post().to(v1::create_wow_instance_match_handler))
+                                        .service(
+                                            web::scope("/{view_uuid}")
+                                                .route("", web::post().to(v1::finish_wow_instance_handler))
+                                                .service(
+                                                    web::scope("/convert")
+                                                        .route("/keystone", web::post().to(v1::convert_wow_instance_to_keystone_handler))
+                                                )
+                                        )
+                                )
+                                .service(
                                     web::scope("/{match_uuid}")
                                         .route("/vods", web::get().to(v1::list_wow_vods_for_squad_in_match_handler))
                                         .service(
