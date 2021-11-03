@@ -1092,7 +1092,7 @@ impl api::ApiApplication {
         Ok(())
     }
 
-    pub async fn finish_wow_instance_match(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid, match_uuid: &Uuid, tm: &DateTime<Utc>, players: &[i32]) -> Result<(), SquadOvError> {
+    pub async fn finish_wow_instance_match(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid, match_uuid: &Uuid, tm: &DateTime<Utc>, players: &[i32], combatants: &[WoWCombatantInfo]) -> Result<(), SquadOvError> {
         sqlx::query!(
             "
             INSERT INTO squadov.new_wow_instances (
@@ -1100,14 +1100,16 @@ impl api::ApiApplication {
                 tr,
                 instance_id,
                 instance_type,
-                players
+                players,
+                players_raw
             )
             SELECT
                 $1,
                 tstzrange(wmv.start_tm, $4, '[]'),
                 wav.instance_id,
                 wav.instance_type,
-                $2
+                $2,
+                $5
             FROM squadov.wow_match_view AS wmv
             INNER JOIN squadov.wow_instance_view AS wav
                 ON wav.view_id = wmv.id
@@ -1117,6 +1119,9 @@ impl api::ApiApplication {
             players,
             view_uuid,
             tm,
+            &combatants.iter().map(|x| {
+                x.guid.clone()
+            }).collect::<Vec<String>>(),
         )
             .execute(&mut *tx)
             .await?;
@@ -1237,7 +1242,7 @@ pub async fn create_wow_instance_match_handler(app : web::Data<Arc<api::ApiAppli
     Ok(HttpResponse::Ok().json(uuid))
 }
 
-pub async fn finish_wow_instance_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWViewPath>, data: web::Json<GenericMatchFinishCreationRequest<()>>) -> Result<HttpResponse, SquadOvError> {
+pub async fn finish_wow_instance_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWViewPath>, data: web::Json<GenericMatchFinishCreationRequest<Option<()>>>) -> Result<HttpResponse, SquadOvError> {
     let player_hashes = generate_combatants_hashed_array(&data.combatants)?;
 
     for _i in 0i32..2 {
@@ -1262,7 +1267,7 @@ pub async fn finish_wow_instance_handler(app : web::Data<Arc<api::ApiApplication
             },
             None => {
                 let new_match = app.create_new_match(&mut tx, SquadOvGames::WorldOfWarcraft).await?;
-                match app.finish_wow_instance_match(&mut tx, &path.view_uuid, &new_match.uuid, &data.timestamp, &player_hashes).await {
+                match app.finish_wow_instance_match(&mut tx, &path.view_uuid, &new_match.uuid, &data.timestamp, &player_hashes, &data.combatants).await {
                     Ok(_) => (),
                     Err(err) => match err {
                         SquadOvError::Duplicate => {
@@ -1300,7 +1305,7 @@ pub async fn convert_wow_instance_to_keystone_handler(app : web::Data<Arc<api::A
     app.delete_wow_instance_view(&mut tx, &path.view_uuid).await?;
 
     tx.commit().await?;
-    Ok(HttpResponse::Ok().json(&path.view_uuid))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 pub async fn finish_wow_challenge_handler(app : web::Data<Arc<api::ApiApplication>>, data: web::Json<GenericMatchFinishCreationRequest<WoWChallengeEnd>>, path: web::Path<super::WoWViewPath>) -> Result<HttpResponse, SquadOvError> {

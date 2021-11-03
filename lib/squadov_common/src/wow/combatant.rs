@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use crate::SquadOvError;
+use std::num::Wrapping;
 
 #[derive(Deserialize, Clone)]
 pub struct WoWCombatantInfo {
@@ -49,8 +50,8 @@ pub fn generate_combatants_hashed_array(combatants: &[WoWCombatantInfo]) -> Resu
         // as having 24 bit hi and lo parts so we actually hash the hi part with a significant number of bits.
         // Taking this code from here:
         // https://lemire.me/blog/2018/08/15/fast-strongly-universal-64-bit-hashing-everywhere/
-        let low: i64 = joint_id & 0x0000000000FFFFFF;
-        let high: i64 = (joint_id & 0x0000FFFFFF000000) >> 24;
-        Ok(((A1 * low + B1 * high + C1) >> 32) as i32)
+        let low = Wrapping(joint_id & 0x0000000000FFFFFF);
+        let high = Wrapping((joint_id & 0x0000FFFFFF000000) >> 24);
+        Ok(((Wrapping(A1) * low + Wrapping(B1) * high + Wrapping(C1)).0 >> 32) as i32)
     }).collect::<Result<Vec<i32>, SquadOvError>>()
 }
