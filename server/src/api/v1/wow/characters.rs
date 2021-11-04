@@ -165,24 +165,13 @@ impl api::ApiApplication {
                 r#"
                 SELECT
                     wucc.unit_guid AS "guid",
-                    COALESCE(wcp.unit_name, '') AS "name!",
-                    COALESCE(ARRAY_AGG(wci.ilvl ORDER BY wci.idx ASC), ARRAY[]::INTEGER[]) AS "items!",
-                    wvc.spec_id,
-                    wvc.team,
-                    wvc.rating,
-                    wvc.class_id
+                    COALESCE(wucc.unit_name, '') AS "name!",
+                    COALESCE(wucc.items, ARRAY[]::INTEGER[]) AS "items!",
+                    COALESCE(wucc.spec_id, -1) AS "spec_id!",
+                    wucc.class_id
                 FROM squadov.wow_user_character_cache AS wucc
-                INNER JOIN squadov.wow_match_view_combatants AS wvc
-                    ON wvc.event_id = wucc.event_id
-                INNER JOIN squadov.wow_match_view_character_presence AS wcp
-                    ON wcp.character_id = wvc.character_id
-                INNER JOIN squadov.wow_match_view AS wmv
-                    ON wmv.id = wcp.view_id
-                LEFT JOIN squadov.wow_match_view_combatant_items AS wci
-                    ON wci.event_id = wvc.event_id
                 WHERE wucc.user_id = $1
-                    AND wmv.build_version SIMILAR TO $2::VARCHAR
-                GROUP BY wucc.unit_guid, wcp.unit_name, wvc.spec_id, wvc.team, wvc.rating, wvc.class_id
+                    AND wucc.build_version SIMILAR TO $2::VARCHAR
                 "#,
                 user_id,
                 games::wow_release_to_db_build_expression(release),
@@ -196,9 +185,9 @@ impl api::ApiApplication {
                         name: x.name,
                         ilvl: compute_wow_character_ilvl(&x.items),
                         spec_id: x.spec_id,
-                        team: x.team,
-                        rating: x.rating,
-                        class_id: x.class_id,
+                        team: 0,
+                        rating: 0,
+                        class_id: x.class_id.map(|x| { x as i64 } ),
                     }
                 })
                 .collect()
