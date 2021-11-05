@@ -125,14 +125,12 @@ def extract_instances_to(data, interface, listfile, output):
     with open(os.path.join(data, 'map.csv')) as maps:
         reader = csv.DictReader(maps)
         for row in reader:
-            if row['InstanceType'] != '1' and row['InstanceType'] != '2' and row['InstanceType'] != '4':
-                continue
-
             allInstances[row['ID']] = {
                 'id': row['ID'],
                 'name': row['MapName_lang'],
                 'expansion': row['ExpansionID'],
-                'loadingScreenId': row['LoadingScreenID']
+                'loadingScreenId': row['LoadingScreenID'],
+                'instanceType': row['InstanceType'],
             }
 
     allLoading = {}
@@ -368,17 +366,17 @@ def extract_data_to(data, interface, output, vanilla, tbc):
         os.makedirs(output)
 
     listfile = load_listfile(os.path.join(data, 'listfile.csv'))
-    extract_difficulty_to(data, interface, os.path.join(output, 'difficulty'))
-    extract_classes_to(data, interface, listfile, os.path.join(output, 'class'), os.path.join(output, 'specs'), not tbc and not vanilla)
+    #extract_difficulty_to(data, interface, os.path.join(output, 'difficulty'))
+    #extract_classes_to(data, interface, listfile, os.path.join(output, 'class'), os.path.join(output, 'specs'), not tbc and not vanilla)
     extract_instances_to(data, interface, listfile, os.path.join(output, 'instances'))
-    extract_spells_to(data, interface, listfile, os.path.join(output, 'spells'))
-    extract_items_to(data, interface, listfile, os.path.join(output, 'items'), tbc or not vanilla)
+    #extract_spells_to(data, interface, listfile, os.path.join(output, 'spells'))
+    #extract_items_to(data, interface, listfile, os.path.join(output, 'items'), tbc or not vanilla)
 
-    if not vanilla and not tbc:
-        extract_covenants_to(data, interface, os.path.join(output, 'covenants'))
-        extract_soulbinds_to(data, interface, os.path.join(output, 'soulbinds'))
-        extract_conduits_to(data, interface, os.path.join(output, 'conduits'))
-        extract_talents_to(data, interface, listfile, os.path.join(output, 'talents'))
+    #if not vanilla and not tbc:
+    #    extract_covenants_to(data, interface, os.path.join(output, 'covenants'))
+    #    extract_soulbinds_to(data, interface, os.path.join(output, 'soulbinds'))
+    #    extract_conduits_to(data, interface, os.path.join(output, 'conduits'))
+    #    extract_talents_to(data, interface, listfile, os.path.join(output, 'talents'))
 
 def main():
     parser = argparse.ArgumentParser()

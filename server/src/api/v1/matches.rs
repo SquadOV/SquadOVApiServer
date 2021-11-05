@@ -22,6 +22,7 @@ use squadov_common::{
         WoWEncounter,
         WoWChallenge,
         WoWArena,
+        WowInstance,
     },
     access::{
         AccessTokenRequest,
@@ -300,6 +301,8 @@ impl api::ApiApplication {
                 ON wcv.view_id = wmv.id
             LEFT JOIN squadov.wow_arena_view AS wav
                 ON wav.view_id = wmv.id
+            LEFT JOIN squadov.wow_instance_view AS wiv
+                ON wiv.view_id = wmv.id
             LEFT JOIN LATERAL (
                 SELECT wcp.character_id
                 FROM squadov.wow_match_view_character_presence AS wcp
@@ -388,6 +391,9 @@ impl api::ApiApplication {
                                         (t0.s ~ $33 AND t1.s ~ $32)
                                     )
                                     AND $36
+                            )
+                            OR (
+                                wiv.view_id IS NOT NULL
                             )
                         )
                 ))
@@ -558,6 +564,14 @@ impl api::ApiApplication {
                 HashMap::new()
             }
         };
+        let mut wow_instances = {
+            let recent = filter_recent_match_data_by_game(raw_base_matches, SquadOvGames::WorldOfWarcraft);
+            if !recent.is_empty() {
+                self.list_wow_instances_for_uuids(&recent_match_data_uuid_pairs(&recent)).await?.into_iter().map(|x| { ((x.match_uuid.clone(), x.user_uuid.clone()), x)}).collect::<HashMap<(Uuid, Uuid), WowInstance>>()
+            } else {
+                HashMap::new()
+            }
+        };
         let mut tft_matches = {
             let recent = filter_recent_match_data_by_game(raw_base_matches, SquadOvGames::TeamfightTactics);
             if !recent.is_empty() {
@@ -613,6 +627,7 @@ impl api::ApiApplication {
                 let wow_encounter = wow_encounters.remove(&key_pair);
                 let wow_challenge = wow_challenges.remove(&key_pair);
                 let wow_arena = wow_arenas.remove(&key_pair);
+                let wow_instance = wow_instances.remove(&key_pair);
                 let csgo_match = csgo_matches.remove(&key_pair);
         
                 Ok(RecentMatch {
@@ -647,6 +662,7 @@ impl api::ApiApplication {
                     wow_challenge,
                     wow_encounter,
                     wow_arena,
+                    wow_instance,
                     csgo_match,
                 })
             }).collect::<Result<Vec<RecentMatch>, SquadOvError>>()?

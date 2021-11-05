@@ -5,7 +5,10 @@ use uuid::Uuid;
 use std::convert::TryInto;
 use std::cmp::PartialEq;
 use std::str::FromStr;
-use crate::SquadOvError;
+use crate::{
+    SquadOvError,
+    wow::COMBATLOG_FILTER_ME,
+};
 use unicode_segmentation::UnicodeSegmentation;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -278,6 +281,17 @@ fn parse_wow_covenant_from_str(s: &str) -> Result<Option<WowCovenantInfo>, Squad
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+pub struct WowClassUpdateFromSpell {
+    player_guid: String,
+    spell_id: i64,
+    // The latter two are necessary if we want to update the user character cache too.
+    // We will only do that in the case where user_id is not None.
+    player_name: String,
+    user_id: Option<i64>,
+    build_version: String,
+}
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 #[serde(tag="type")]
 pub enum WoWCombatLogEventType {
     UnitDied{
@@ -362,10 +376,7 @@ pub enum WoWCombatLogEventType {
         keystone: i32,
         time_ms: i64
     },
-    ClassUpdateFromSpell{
-        player_guid: String,
-        spell_id: i64,
-    },
+    ClassUpdateFromSpell(WowClassUpdateFromSpell),
     Unknown
 }
 
@@ -482,13 +493,7 @@ pub struct WoWCombatLogEvent {
     pub event: WoWCombatLogEventType
 }
 
-#[derive(Clone,Debug)]
-pub struct WowClassUpdateFromSpell {
-    player_guid: String,
-    spell_id: i64,
-}
-
-pub fn parse_advanced_cvars_and_event_from_wow_combat_log(state: &WoWCombatLogState, payload: &RawWoWCombatLogPayload) -> Result<(Option<WoWCombatLogAdvancedCVars>, WoWCombatLogEventType, Option<WowClassUpdateFromSpell>), crate::SquadOvError> {
+pub fn parse_advanced_cvars_and_event_from_wow_combat_log(state: &WoWCombatLogState, payload: &RawWoWCombatLogPayload, user_id: i64) -> Result<(Option<WoWCombatLogAdvancedCVars>, WoWCombatLogEventType, Option<WowClassUpdateFromSpell>), crate::SquadOvError> {
     let action_parts: Vec<&str> = payload.parts[0].split("_").collect();
     let cl_version: i32 = state.combat_log_version.parse::<i32>()?;
     let advanced_cvar_offset: usize = if cl_version == 9 { 16 } else { 17 };
@@ -601,22 +606,28 @@ pub fn parse_advanced_cvars_and_event_from_wow_combat_log(state: &WoWCombatLogSt
                                     finish: true,
                                     success: true,
                                 },
-                                // In the case older combat logs for wow classic, the class spec isn't printed into the combat log
-                                // so we need to infer it from the spells they cast. We don't want to do this for non-player characters
+                                // We need to update the class from the spell cast for instances where we either
+                                // don't have spec ids (wow classic) or for cases where no combatant info is otherwise
+                                // generated in the combat logs (arenas in classic, RBGs). We don't want to do this for non-player characters
                                 // so we want to compare the player flags and make sure it ANDs againt 0x500 correctly which is
                                 // 0x100 -> controlled by player and 0x400 -> type player.
-                                if cl_version == 9 {
+                                {
                                     let flags = i64::from_str_radix(&payload.parts[3][2..], 16)?;
-                                    if flags & 0x500 > 0 {
+                                    if flags & 0x500 == 0x500 {
                                         Some(WowClassUpdateFromSpell{
                                             player_guid: payload.parts[1].clone(),
+                                            player_name: payload.parts[2].clone(),
+                                            user_id: if flags & COMBATLOG_FILTER_ME == COMBATLOG_FILTER_ME {
+                                                Some(user_id)
+                                            } else {
+                                                None
+                                            },
                                             spell_id,
+                                            build_version: state.build_version.clone(),
                                         })
                                     } else { 
                                         None
                                     }
-                                } else {
-                                    None
                                 }
                             )
                         }),
@@ -735,7 +746,7 @@ pub fn parse_advanced_cvars_and_event_from_wow_combat_log(state: &WoWCombatLogSt
 }
 
 pub fn parse_raw_wow_combat_log_payload(uuid: &Uuid, alt_id: i64, user_id: i64, state: &WoWCombatLogState, payload: &RawWoWCombatLogPayload) -> Result<Vec<WoWCombatLogEvent>, crate::SquadOvError> {
-    let (advanced, event, class_update) = parse_advanced_cvars_and_event_from_wow_combat_log(state, payload).unwrap_or((None, WoWCombatLogEventType::Unknown, None));
+    let (advanced, event, class_update) = parse_advanced_cvars_and_event_from_wow_combat_log(state, payload, user_id).unwrap_or((None, WoWCombatLogEventType::Unknown, None));
     if event == WoWCombatLogEventType::Unknown {
         return Ok(vec![])
     }
@@ -794,10 +805,7 @@ pub fn parse_raw_wow_combat_log_payload(uuid: &Uuid, alt_id: i64, user_id: i64, 
             source: None,
             dest: None,
             advanced: None,
-            event: WoWCombatLogEventType::ClassUpdateFromSpell{
-                player_guid: update.player_guid,
-                spell_id: update.spell_id,
-            },
+            event: WoWCombatLogEventType::ClassUpdateFromSpell(update),
         });
     }
 
@@ -1330,49 +1338,59 @@ async fn bulk_update_wow_user_character_cache(tx: &mut Transaction<'_, Postgres>
         return Ok(())
     }
 
-    let mut values: Vec<String> = Vec::new();
+    let mut user_ids: Vec<i64> = vec![];
+    let mut unit_guids: Vec<String> = vec![];
+    let mut view_ids: Vec<Uuid> = vec![];
     for ((user_id, unit_guid), view_id) in update {
-        values.push(
-            format!("
-                (
-                    {user_id},
-                    '{unit_guid}',
-                    '{view_id}'
-                )
-            ",
-                user_id=user_id,
-                unit_guid=&unit_guid,
-                view_id=&view_id,
-            )
-        );
+        user_ids.push(user_id);
+        unit_guids.push(unit_guid);
+        view_ids.push(view_id);
     }
 
-    sqlx::query(
-        &format!("
+    sqlx::query!(
+        "
             INSERT INTO squadov.wow_user_character_cache (
                 user_id,
                 unit_guid,
-                event_id,
-                cache_time
+                unit_name,
+                spec_id,
+                class_id,
+                items,
+                cache_time,
+                build_version
             )
             SELECT DISTINCT ON (data.user_id, data.unit_guid)
                 data.user_id,
                 data.unit_guid,
-                wvc.event_id,
-                NOW()
-            FROM (
-                VALUES {}
-            ) AS data(user_id, unit_guid, view_id)
+                wcp.unit_name,
+                wvc.spec_id,
+                wvc.class_id,
+                ARRAY_AGG(wci.ilvl ORDER BY wci.idx ASC),
+                NOW(),
+                wmv.build_version
+            FROM UNNEST($1::BIGINT[], $2::VARCHAR[], $3::UUID[]) AS data(user_id, unit_guid, view_id)
             INNER JOIN squadov.wow_match_view_character_presence AS wcp
-                ON wcp.view_id = (data.view_id)::UUID
+                ON wcp.view_id = data.view_id
                     AND wcp.unit_guid = data.unit_guid
             INNER JOIN squadov.wow_match_view_combatants AS wvc
                 ON wvc.character_id = wcp.character_id
+            INNER JOIN squadov.wow_match_view AS wmv
+                ON wmv.id = data.view_id
+            LEFT JOIN squadov.wow_match_view_combatant_items AS wci
+                ON wci.event_id = wvc.event_id
+            GROUP BY data.user_id, data.unit_guid, wcp.unit_name, wvc.spec_id, wvc.class_id, wmv.build_version, wvc.event_id
             ORDER BY data.user_id, data.unit_guid, wvc.event_id DESC
             ON CONFLICT (user_id, unit_guid) DO UPDATE SET
-                event_id = EXCLUDED.event_id,
-                cache_time = EXCLUDED.cache_time
-        ", values.join(","))
+                unit_name = EXCLUDED.unit_name,
+                spec_id = EXCLUDED.spec_id,
+                class_id = EXCLUDED.class_id,
+                items = EXCLUDED.items,
+                cache_time = EXCLUDED.cache_time,
+                build_version = EXCLUDED.build_version
+        ",
+        &user_ids,
+        &unit_guids,
+        &view_ids,
     )
         .execute(&mut *tx)
         .await?;
@@ -1764,17 +1782,17 @@ async fn bulk_insert_wow_spell_cast_events(tx: &mut Transaction<'_, Postgres>, e
     Ok(())
 }
 
-async fn bulk_update_combatant_class_from_spell_cast(tx: &mut Transaction<'_, Postgres>, events: Vec<WoWCombatLogEvent>) -> Result<(), SquadOvError> {
+async fn bulk_update_combatant_class_from_spell_cast(tx: &mut Transaction<'_, Postgres>, events: &[WoWCombatLogEvent]) -> Result<(), SquadOvError> {
     // What needs to happen here is that we need to update the class_id column in wow_match_view_combatants 
     // by inferring what class it is from the spell ID. Really just a lot of fun all around.
     let mut player_guids: Vec<String> = vec![];
     let mut spell_ids: Vec<i64> = vec![];
     let mut alt_view_ids: Vec<i64> = vec![];
     
-    events.into_iter().for_each(|x| {
-        if let WoWCombatLogEventType::ClassUpdateFromSpell{player_guid, spell_id} = x.event {
-            player_guids.push(player_guid);
-            spell_ids.push(spell_id);
+    events.iter().for_each(|x| {
+        if let WoWCombatLogEventType::ClassUpdateFromSpell(update) = &x.event {
+            player_guids.push(update.player_guid.clone());
+            spell_ids.push(update.spell_id);
             alt_view_ids.push(x.alt_view_id);
         }
     });
@@ -1790,7 +1808,7 @@ async fn bulk_update_combatant_class_from_spell_cast(tx: &mut Transaction<'_, Po
                 ON wmv.alt_id = t.view_id
             INNER JOIN squadov.wow_spell_to_class AS wsc
                 ON wsc.spell_id = t.spell_id
-                    AND wmv.build_version LIKE wsc.build_id  || '%'
+                    AND wmv.build_version LIKE wsc.build_id  || '.%'
             INNER JOIN squadov.wow_match_view_events AS wve
                 ON wve.view_id = wmv.alt_id
             INNER JOIN squadov.wow_match_view_combatants AS wvc
@@ -1805,6 +1823,95 @@ async fn bulk_update_combatant_class_from_spell_cast(tx: &mut Transaction<'_, Po
         &player_guids,
         &spell_ids,
         &alt_view_ids,
+    )
+        .execute(&mut *tx)
+        .await?;
+
+    // This is maybe a bit redundant but this information needs to be stored in
+    // wow_match_view_combatants as well as wow_match_view_character_presence. We
+    // later decided to add the identical column to wow_match_view_character_presence
+    // because certain modes (RBGs, WoW classic arena) will not have COMBATANT_INFO
+    // so no wow_match_view_combatants rows will exist but we still need to store the
+    // class information elsewhere.
+    sqlx::query!(
+        r#"
+        UPDATE squadov.wow_match_view_character_presence AS wcp
+        SET class_id = sub.class_id
+        FROM (
+            SELECT t.guid, wsc.class_id, wmv.id AS "view_id"
+            FROM UNNEST($1::VARCHAR[], $2::BIGINT[], $3::BIGINT[]) AS t(guid, spell_id, view_id)
+            INNER JOIN squadov.wow_match_view AS wmv
+                ON wmv.alt_id = t.view_id
+            INNER JOIN squadov.wow_spell_to_class AS wsc
+                ON wsc.spell_id = t.spell_id
+                    AND wmv.build_version LIKE wsc.build_id  || '.%'
+        ) AS sub
+        WHERE wcp.view_id = sub.view_id
+            AND unit_guid = sub.guid
+        "#,
+        &player_guids,
+        &spell_ids,
+        &alt_view_ids,
+    )
+        .execute(&mut *tx)
+        .await?;
+    Ok(())
+}
+
+async fn bulk_update_user_character_cache_from_spell_cast(tx: &mut Transaction<'_, Postgres>, events: &[WoWCombatLogEvent]) -> Result<(), SquadOvError> {
+    let mut player_set: HashSet<(i64, String)> = HashSet::new();
+
+    let mut player_guids: Vec<String> = vec![];
+    let mut player_names: Vec<String> = vec![];
+    let mut player_user_ids: Vec<i64> = vec![];
+    let mut spell_ids: Vec<i64> = vec![];
+    let mut player_build_versions: Vec<String> = vec![];
+
+    events.iter().for_each(|x| {
+        if let WoWCombatLogEventType::ClassUpdateFromSpell(update) = &x.event {
+            if let Some(user_id) = update.user_id {
+                if !player_set.contains(&(user_id, update.player_guid.clone())) {
+                    player_guids.push(update.player_guid.clone());
+                    player_names.push(update.player_name.clone());
+                    player_user_ids.push(user_id);
+                    player_build_versions.push(update.build_version.clone());
+                    spell_ids.push(update.spell_id);
+                    player_set.insert((user_id, update.player_guid.clone()));
+                }
+            }
+        }
+    });
+
+    if player_guids.is_empty() {
+        return Ok(());
+    }
+
+    sqlx::query!(
+        "
+        INSERT INTO squadov.wow_user_character_cache (
+            user_id,
+            unit_guid,
+            unit_name,
+            class_id,
+            cache_time,
+            build_version
+        )
+        SELECT t.user_id, t.unit_guid, t.unit_name, wsc.class_id, NOW(), t.build_version
+        FROM UNNEST($1::BIGINT[], $2::VARCHAR[], $3::VARCHAR[], $4::VARCHAR[], $5::BIGINT[]) AS t(user_id, unit_guid, unit_name, build_version, spell_id)
+        INNER JOIN squadov.wow_spell_to_class AS wsc
+            ON wsc.spell_id = t.spell_id
+                AND t.build_version LIKE wsc.build_id  || '.%'
+        ON CONFLICT (user_id, unit_guid) DO UPDATE SET
+            unit_name = EXCLUDED.unit_name,
+            class_id = EXCLUDED.class_id,
+            cache_time = EXCLUDED.cache_time,
+            build_version = EXCLUDED.build_version
+        ",
+        &player_user_ids,
+        &player_guids,
+        &player_names,
+        &player_build_versions,
+        &spell_ids,
     )
         .execute(tx)
         .await?;
@@ -1834,13 +1941,13 @@ async fn bulk_insert_wow_events(tx: &mut Transaction<'_, Postgres>, events: Vec<
 
     events.into_iter().for_each(|x| {
         if let Some(source) = &x.source {
-            if source.flags & crate::COMBATLOG_FILTER_ME == crate::COMBATLOG_FILTER_ME && source.guid != crate::NIL_WOW_GUID {
+            if source.flags & COMBATLOG_FILTER_ME == COMBATLOG_FILTER_ME && source.guid != crate::NIL_WOW_GUID {
                 user_character_cache.insert((x.user_id, source.guid.clone()), x.view_id.clone());
             }
         }
 
         if let Some(dest) = &x.dest {
-            if dest.flags & crate::COMBATLOG_FILTER_ME == crate::COMBATLOG_FILTER_ME && dest.guid != crate::NIL_WOW_GUID {
+            if dest.flags & COMBATLOG_FILTER_ME == COMBATLOG_FILTER_ME && dest.guid != crate::NIL_WOW_GUID {
                 user_character_cache.insert((x.user_id, dest.guid.clone()), x.view_id.clone());
             }
         }
@@ -1871,8 +1978,9 @@ async fn bulk_insert_wow_events(tx: &mut Transaction<'_, Postgres>, events: Vec<
     bulk_insert_wow_death_events(&mut *tx, death_events, ids).await?;
     bulk_insert_wow_aura_break_events(&mut *tx, aura_break_events, ids).await?;
     bulk_insert_wow_spell_cast_events(&mut *tx, spell_cast_events, ids).await?;
+    bulk_update_combatant_class_from_spell_cast(&mut *tx, &class_updates_from_spell_events).await?;
     bulk_update_wow_user_character_cache(&mut *tx, user_character_cache).await?;
-    bulk_update_combatant_class_from_spell_cast(&mut *tx, class_updates_from_spell_events).await?;
+    bulk_update_user_character_cache_from_spell_cast(&mut *tx, &class_updates_from_spell_events).await?;
 
     Ok(())
 }
