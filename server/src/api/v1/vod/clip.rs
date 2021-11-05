@@ -473,7 +473,7 @@ impl api::ApiApplication {
         Ok(
             sqlx::query_as!(
                 ClipComment,
-                "
+                r#"
                 WITH new_comment AS (
                     INSERT INTO squadov.clip_comments (
                         clip_uuid,
@@ -490,15 +490,15 @@ impl api::ApiApplication {
                     RETURNING *
                 )
                 SELECT
-                    cc.id,
-                    cc.clip_uuid,
-                    u.username,
-                    cc.comment,
-                    cc.tm
+                    cc.id AS "id!",
+                    cc.clip_uuid AS "clip_uuid!",
+                    u.username AS "username!",
+                    cc.comment AS "comment!",
+                    cc.tm AS "tm!"
                 FROM new_comment AS cc
                 INNER JOIN squadov.users AS u
                     ON u.id = cc.user_id
-                ",
+                "#,
                 clip_uuid,
                 user_id,
                 comment,
