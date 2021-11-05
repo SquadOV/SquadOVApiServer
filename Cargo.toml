@@ -17,4 +17,3 @@ default-members = [
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler"
 ]
-exclude = ["deps/cargo/sqlx"]
