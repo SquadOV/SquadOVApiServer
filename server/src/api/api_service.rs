@@ -714,6 +714,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 .route("/encounters", web::get().to(v1::list_wow_encounters_for_character_handler))
                                                 .route("/challenges", web::get().to(v1::list_wow_challenges_for_character_handler))
                                                 .route("/arena", web::get().to(v1::list_wow_arenas_for_character_handler))
+                                                .route("/instance", web::get().to(v1::list_wow_instances_for_character_handler))
                                         )
                                 )
                                 .service(

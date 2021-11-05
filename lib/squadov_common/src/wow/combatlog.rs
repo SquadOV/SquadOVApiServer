@@ -1824,7 +1824,36 @@ async fn bulk_update_combatant_class_from_spell_cast(tx: &mut Transaction<'_, Po
         &spell_ids,
         &alt_view_ids,
     )
-        .execute(tx)
+        .execute(&mut *tx)
+        .await?;
+
+    // This is maybe a bit redundant but this information needs to be stored in
+    // wow_match_view_combatants as well as wow_match_view_character_presence. We
+    // later decided to add the identical column to wow_match_view_character_presence
+    // because certain modes (RBGs, WoW classic arena) will not have COMBATANT_INFO
+    // so no wow_match_view_combatants rows will exist but we still need to store the
+    // class information elsewhere.
+    sqlx::query!(
+        r#"
+        UPDATE squadov.wow_match_view_character_presence AS wcp
+        SET class_id = sub.class_id
+        FROM (
+            SELECT t.guid, wsc.class_id, wmv.id AS "view_id"
+            FROM UNNEST($1::VARCHAR[], $2::BIGINT[], $3::BIGINT[]) AS t(guid, spell_id, view_id)
+            INNER JOIN squadov.wow_match_view AS wmv
+                ON wmv.alt_id = t.view_id
+            INNER JOIN squadov.wow_spell_to_class AS wsc
+                ON wsc.spell_id = t.spell_id
+                    AND wmv.build_version LIKE wsc.build_id  || '.%'
+        ) AS sub
+        WHERE wcp.view_id = sub.view_id
+            AND unit_guid = sub.guid
+        "#,
+        &player_guids,
+        &spell_ids,
+        &alt_view_ids,
+    )
+        .execute(&mut *tx)
         .await?;
     Ok(())
 }

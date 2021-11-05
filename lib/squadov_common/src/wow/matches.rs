@@ -157,6 +157,20 @@ pub struct WowInstanceData {
     pub instance_type: WowInstanceType,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WowInstance {
+    pub match_uuid: Uuid,
+    pub tm: DateTime<Utc>,
+    pub combatants_key: String,
+    pub instance_id: i32,
+    pub finish_time: Option<DateTime<Utc>>,
+    pub success: bool,
+    pub build: String,
+    pub instance_type: WowInstanceType,
+    pub user_uuid: Uuid,
+}
+
 #[derive(Clone)]
 pub struct GenericWoWMatchView {
     pub alt_id: i64,

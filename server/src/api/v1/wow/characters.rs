@@ -78,7 +78,8 @@ impl api::ApiApplication {
                     r#"
                     SELECT
                         wcp.unit_guid,
-                        COALESCE(wcp.unit_name, '') AS "unit_name!"
+                        COALESCE(wcp.unit_name, '') AS "unit_name!",
+                        wcp.class_id
                     FROM squadov.wow_match_view AS wmv
                     INNER JOIN squadov.wow_match_view_character_presence AS wcp
                         ON wcp.view_id = wmv.id
@@ -101,7 +102,7 @@ impl api::ApiApplication {
                             spec_id: -1,
                             team: -1,
                             rating: -1,
-                            class_id: None,
+                            class_id: x.class_id.map(|x| { x as i64 }),
                         }
                     })
                     .collect()
