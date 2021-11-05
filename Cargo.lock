@@ -400,7 +400,7 @@ dependencies = [
  "amq-protocol-types",
  "amq-protocol-uri",
  "cookie-factory",
- "nom 7.0.0",
+ "nom 7.1.0",
 ]
 
 [[package]]
@@ -421,7 +421,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4d729c0bd2ad5fc6aeac1011032ec8a91d66f08405e08d1290fe66ed7abd2e7"
 dependencies = [
  "cookie-factory",
- "nom 7.0.0",
+ "nom 7.1.0",
  "serde",
  "serde_json",
 ]
@@ -2361,9 +2361,9 @@ dependencies = [
 
 [[package]]
 name = "minimal-lexical"
-version = "0.1.4"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c64630dcdd71f1a64c435f54885086a0de5d6a12d104d69b165fb7d5286d677"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniz_oxide"
@@ -2507,9 +2507,9 @@ dependencies = [
 
 [[package]]
 name = "nom"
-version = "7.0.0"
+version = "7.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ffd9d26838a953b4af82cbeb9f1592c6798916983959be223a7124e992742c1"
+checksum = "1b1d11e1ef389c76fe5b81bcaf2ea32cf88b62bc494e19f493d0b30e7a930109"
 dependencies = [
  "memchr",
  "minimal-lexical",
@@ -2761,8 +2761,6 @@ dependencies = [
 [[package]]
 name = "petname"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9ed8e1c7b7cdd47819f76bbec141b4d4b59bb8ffd26c372cc236c90cd90becc"
 dependencies = [
  "clap",
  "itertools",
@@ -3477,9 +3475,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-native-certs"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5398f427a2b9246bfdfb86bc0ab11a15e49ccc7013d1d1346b8a26d4a366849d"
+checksum = "5ca9ebdfa27d3fc180e42879037b5338ab1c040c06affd00d8338598e7800943"
 dependencies = [
  "openssl-probe",
  "rustls-pemfile",

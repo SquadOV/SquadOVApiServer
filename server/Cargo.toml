@@ -50,7 +50,7 @@ serde_qs = { version = "0.8", features = ["actix"] }
 lru = "0.6.5"
 harsh = "0.2.1"
 hmac = "0.11.0"
-petname = "1.1.0"
+petname = { path="../deps/cargo/rust-petname", version = "1.1.0" }
 convert_case = "0.4.0"
 
 [[bin]]

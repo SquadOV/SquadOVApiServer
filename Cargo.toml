@@ -16,4 +16,9 @@ default-members = [
     "tools/wow_match_transfer",
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler"
+<<<<<<< HEAD
 ]
+exclude = ["deps/cargo/sqlx", "deps/cargo/rust-petname"]
+=======
+]
+>>>>>>> origin/master
