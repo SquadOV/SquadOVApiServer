@@ -61,7 +61,7 @@ rusoto_s3 = "0.45.0"
 rusoto_credential = "0.45.0"
 image = "0.23.14"
 harsh = "0.2.1"
-petname = "1.1.0"
+petname = { path="../../deps/cargo/rust-petname", version = "1.1.0" }
 rsa = "0.5.0"
 sha-1 = "0.9.7"
 hmac = "0.11.0"
