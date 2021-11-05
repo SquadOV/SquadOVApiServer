@@ -88,13 +88,25 @@ where
     Ok(
         sqlx::query_as!(
             VodMetadata,
-            "
-            SELECT vm.*
+            r#"
+            SELECT
+                vm.video_uuid AS "video_uuid!",
+                vm.res_x AS "res_x!",
+                vm.res_y AS "res_y!",
+                vm.fps AS "fps!",
+                vm.min_bitrate AS "min_bitrate!",
+                vm.avg_bitrate AS "avg_bitrate!",
+                vm.max_bitrate AS "max_bitrate!",
+                vm.bucket AS "bucket!",
+                vm.session_id AS "session_id",
+                vm.id AS "id!",
+                vm.has_fastify AS "has_fastify!",
+                vm.has_preview AS "has_preview!"
             FROM UNNEST($1::UUID[], $2::VARCHAR[]) AS inp(uuid, id)
             INNER JOIN squadov.vod_metadata AS vm
                 ON vm.video_uuid = inp.uuid
                     AND vm.id = inp.id
-            ",
+            "#,
             &uuids,
             &ids,
         )

@@ -110,7 +110,15 @@ pub async fn list_tft_match_summaries_for_uuids(ex: &PgPool, uuids: &[MatchPlaye
     let mut unit_map: HashMap<(Uuid, Uuid), Vec<TftUnitDto>> = HashMap::new();
     sqlx::query!(
         r#"
-        SELECT tmpu.*, u.uuid AS "user_uuid!"
+        SELECT
+            tmpu.match_uuid AS "match_uuid!",
+            tmpu.items AS "items!",
+            tmpu.character_id,
+            tmpu.chosen,
+            tmpu.name AS "name!",
+            tmpu.rarity AS "rarity!",
+            tmpu.tier AS "tier!",
+            u.uuid AS "user_uuid!"
         FROM UNNEST($1::UUID[], $2::UUID[]) AS inp(match_uuid, user_uuid)
         INNER JOIN squadov.users AS u
             ON u.uuid = inp.user_uuid
@@ -145,7 +153,14 @@ pub async fn list_tft_match_summaries_for_uuids(ex: &PgPool, uuids: &[MatchPlaye
     let mut trait_map: HashMap<(Uuid, Uuid), Vec<TftTraitDto>> = HashMap::new();
     sqlx::query!(
         r#"
-        SELECT tmpt.*, u.uuid AS "user_uuid!"
+        SELECT
+            tmpt.match_uuid AS "match_uuid!",
+            tmpt.name AS "name!",
+            tmpt.num_units AS "num_units!",
+            tmpt.style AS "style!",
+            tmpt.tier_current AS "tier_current!",
+            tmpt.tier_total AS "tier_total!",
+            u.uuid AS "user_uuid!"
         FROM UNNEST($1::UUID[], $2::UUID[]) AS inp(match_uuid, user_uuid)
         INNER JOIN squadov.users AS u
             ON u.uuid = inp.user_uuid
