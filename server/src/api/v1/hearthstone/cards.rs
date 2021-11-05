@@ -16,10 +16,10 @@ impl api::ApiApplication {
             HearthstoneCardMetadata,
             r#"
             SELECT
-                hc.card_id,
-                hcn.string AS "name",
-                hct_cost.val AS "cost",
-                hct_rare.val AS "rarity"
+                hc.card_id AS "card_id!",
+                hcn.string AS "name!",
+                hct_cost.val AS "cost!",
+                hct_rare.val AS "rarity!"
             FROM squadov.hearthstone_cards AS hc
             INNER JOIN squadov.hearthstone_card_names AS hcn
                 ON hcn.card_id = hc.card_id AND hcn.locale = 'en_US'

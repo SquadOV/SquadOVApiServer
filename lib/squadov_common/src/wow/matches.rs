@@ -1,5 +1,7 @@
 use crate::SquadOvError;
 use serde::{Serialize, Deserialize};
+use serde_repr::{Serialize_repr, Deserialize_repr};
+use num_enum::TryFromPrimitive;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use sqlx::{Executor, Postgres};
@@ -131,6 +133,42 @@ pub struct WoWArena {
     pub user_uuid: Uuid,
     pub success: bool,
     pub build: String
+}
+
+#[derive(Copy, Clone, Serialize_repr, Deserialize_repr, Debug, TryFromPrimitive, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum WowInstanceType {
+    NotInstanced,
+    PartyDungeon,
+    RaidDungeon,
+    PVPBattlefield,
+    ArenaBattlefield,
+    Scenario,
+    Unknown
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WowInstanceData {
+    pub id: i64,
+    pub name: String,
+    pub expansion: i64,
+    pub loading_screen_id: i64,
+    pub instance_type: WowInstanceType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WowInstance {
+    pub match_uuid: Uuid,
+    pub tm: DateTime<Utc>,
+    pub combatants_key: String,
+    pub instance_id: i32,
+    pub finish_time: Option<DateTime<Utc>>,
+    pub success: bool,
+    pub build: String,
+    pub instance_type: WowInstanceType,
+    pub user_uuid: Uuid,
 }
 
 #[derive(Clone)]

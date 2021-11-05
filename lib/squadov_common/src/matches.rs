@@ -14,6 +14,7 @@ use crate::{
         WoWEncounter,
         WoWChallenge,
         WoWArena,
+        WowInstance,
     },
     csgo::summary::CsgoPlayerMatchSummary,
 };
@@ -72,6 +73,7 @@ pub struct RecentMatch {
     pub wow_challenge: Option<WoWChallenge>,
     pub wow_encounter: Option<WoWEncounter>,
     pub wow_arena: Option<WoWArena>,
+    pub wow_instance: Option<WowInstance>,
     pub csgo_match: Option<CsgoPlayerMatchSummary>,
 }
 

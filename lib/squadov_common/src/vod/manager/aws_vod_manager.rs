@@ -22,6 +22,7 @@ use rusoto_s3::{
     CreateMultipartUploadRequest,
     UploadPartRequest,
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
+    HeadObjectRequest,
     Tagging,
     Tag,
     util::{
@@ -327,5 +328,18 @@ impl VodManager for S3VodManager {
                 false
             }
         )
+    }
+
+    async fn get_vod_md5(&self, segment: &VodSegmentId) -> Result<String, SquadOvError> {
+        // Note that this isn't entirely accurate - the AWS S3 object's ETag isn't necessarily
+        // the MD5 hash if the file is uploaded using multipart upload. Thus we really do need
+        // to verify on the client side that the VOD is fastified first before trying to download.
+        let req = HeadObjectRequest{
+            bucket: self.bucket.clone(),
+            key: segment.get_fname(),
+            ..HeadObjectRequest::default()
+        };
+        let resp = self.client().s3.head_object(req).await?;
+        Ok(resp.e_tag.unwrap_or(String::new()).replace("\"", ""))
     }
 }

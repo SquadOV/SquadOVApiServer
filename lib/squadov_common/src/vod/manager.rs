@@ -50,4 +50,5 @@ pub trait VodManager {
     async fn make_segment_public(&self, segment: &VodSegmentId) -> Result<(), SquadOvError>;
     async fn check_vod_segment_is_public(&self, segment: &VodSegmentId) -> Result<bool, SquadOvError>;
     async fn delete_vod(&self, segment: &VodSegmentId) -> Result<(), SquadOvError>;
+    async fn get_vod_md5(&self, segment: &VodSegmentId) -> Result<String, SquadOvError>;
 }
