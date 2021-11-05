@@ -254,7 +254,7 @@ pub fn riot_region_to_routing(region: &str) -> Result<String, SquadOvError> {
     let region = region.to_uppercase();
 
     Ok(String::from(
-        if region.starts_with("NA") || region.starts_with("BR") || region.starts_with("LAN") || region.starts_with("LAS") || region.starts_with("OCE") {
+        if region.starts_with("NA") || region.starts_with("BR") || region.starts_with("LAN") || region.starts_with("LAS") || region.starts_with("OC") {
             "americas"
         } else if region.starts_with("KR") || region.starts_with("JP") {
             "asia"

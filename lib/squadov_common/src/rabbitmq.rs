@@ -191,6 +191,7 @@ impl RabbitMqConnectionBundle {
     pub async fn publish(&self, msg: RabbitMqPacket, ch_idx: usize) -> Result<(), SquadOvError> {
         let ch = self.channels.get(ch_idx);
         if ch.is_none() {
+            log::warn!("Invalid Channel Index: {}", ch_idx);
             return Err(SquadOvError::BadRequest)
         }
 
@@ -204,7 +205,7 @@ impl RabbitMqConnectionBundle {
                 "",
                 &msg.queue,
                 BasicPublishOptions::default(),
-                msg.data,
+                &msg.data,
                 BasicProperties::default()
                     .with_priority(msg.priority)
                     .with_timestamp(msg.timestamp.timestamp() as u64)

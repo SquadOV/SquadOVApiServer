@@ -30,6 +30,25 @@ pub struct VodPartQuery {
 }
 
 impl api::ApiApplication {
+    pub async fn check_is_vod_fastify(&self, video_uuid: &Uuid) -> Result<bool, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                r#"
+                SELECT COALESCE(BOOL_OR(f.has_fastify), FALSE) AS "has_fastify!"
+                FROM (
+                    SELECT has_fastify
+                    FROM squadov.vod_metadata
+                    WHERE video_uuid = $1
+                ) AS f
+                "#,
+                video_uuid,
+            )
+                .fetch_one(&*self.pool)
+                .await?
+                .has_fastify
+        )
+    }
+    
     pub async fn get_vod_quality_options(&self, video_uuid: &[Uuid]) -> Result<HashMap<Uuid, Vec<VodMetadata>>, SquadOvError> {
         let metadata = sqlx::query_as!(
             VodMetadata,
@@ -193,6 +212,10 @@ pub async fn get_vod_association_handler(data : web::Path<VodFindFromVideoUuid>,
 #[derive(Deserialize)]
 pub struct VodTrackQuery {
     pub md5: Option<i32>,
+}
+
+pub async fn get_vod_fastify_status_handler(data : web::Path<VodFindFromVideoUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(app.check_is_vod_fastify(&data.video_uuid).await?))
 }
 
 pub async fn get_vod_track_segment_handler(data : web::Path<squadov_common::VodSegmentId>, app : web::Data<Arc<api::ApiApplication>>, query: web::Query<VodTrackQuery>) -> Result<HttpResponse, SquadOvError> {

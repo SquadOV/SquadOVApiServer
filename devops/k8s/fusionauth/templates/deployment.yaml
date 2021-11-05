@@ -52,7 +52,7 @@ spec:
                     - name: FUSIONAUTH_APP_SILENT_MODE
                       value: "true"
                     - name: DATABASE_MAXIMUM_POOL_SIZE
-                      value: "32"
+                      value: "128"
                     - name: DATABASE_CONNECTION_TIMEOUT
                       value: "20000"
                     - name: DATABASE_CONNECTION_HEALTHCHECK_99PERCENT_MS
