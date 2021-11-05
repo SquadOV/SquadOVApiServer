@@ -221,4 +221,10 @@ impl VodManager for GCSVodManager {
         let client = self.get_gcp_client().gcs();
         Ok(client.check_object_public_acl(&self.bucket, &fname).await?)
     }
+
+    async fn get_vod_md5(&self, _segment: &VodSegmentId) -> Result<String, SquadOvError> {
+        // TODO: The Google Cloud videos should be sufficiently old at this point that it's unlikely
+        // that users will be downloading their old VODs.
+        Ok(String::new())
+    }
 }

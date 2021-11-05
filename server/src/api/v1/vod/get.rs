@@ -209,23 +209,31 @@ pub async fn get_vod_association_handler(data : web::Path<VodFindFromVideoUuid>,
     Ok(HttpResponse::Ok().json(assocs.remove(&data.video_uuid).ok_or(SquadOvError::NotFound)?))
 }
 
+#[derive(Deserialize)]
+pub struct VodTrackQuery {
+    pub md5: Option<i32>,
+}
+
 pub async fn get_vod_fastify_status_handler(data : web::Path<VodFindFromVideoUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
     Ok(HttpResponse::Ok().json(app.check_is_vod_fastify(&data.video_uuid).await?))
 }
 
-pub async fn get_vod_track_segment_handler(data : web::Path<squadov_common::VodSegmentId>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_vod_track_segment_handler(data : web::Path<squadov_common::VodSegmentId>, app : web::Data<Arc<api::ApiApplication>>, query: web::Query<VodTrackQuery>) -> Result<HttpResponse, SquadOvError> {
     let metadata = db::get_vod_metadata(&*app.pool, &data.video_uuid, "source").await?;
     let manager = app.get_vod_manager(&metadata.bucket).await?;
 
-    // If the VOD is public (shared), then we can return the public URL instead of the signed private one.
-    let redirect_uri = if data.segment_name != "preview.mp4" && db::check_if_vod_public(&*app.pool, &data.video_uuid).await? && manager.check_vod_segment_is_public(&data).await? {
+    let response_string = if let Some(_md5) = query.md5 {
+        manager.get_vod_md5(&data).await?
+    } else if data.segment_name != "preview.mp4" && db::check_if_vod_public(&*app.pool, &data.video_uuid).await? && manager.check_vod_segment_is_public(&data).await? {
+        // If the VOD is public (shared), then we can return the public URL instead of the signed private one.
         manager.get_public_segment_redirect_uri(&data).await?
     } else {
         manager.get_segment_redirect_uri(&data).await?
     };
+
     // You may be tempted to make this into a TemporaryRedirect and point
     // a media player (e.g. VideoJS) to load from this directly. Don't do that
     // unless you can figure out how to also pass the user's session ID along
     // with that request since this is a protected endpoint.
-    return Ok(HttpResponse::Ok().json(&redirect_uri))
+    Ok(HttpResponse::Ok().json(&response_string))
 }
