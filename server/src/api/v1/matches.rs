@@ -266,9 +266,19 @@ impl api::ApiApplication {
             SELECT DISTINCT v.match_uuid AS "match_uuid!", v.user_uuid AS "uuid!", v.end_time
             FROM squadov.users AS u
             CROSS JOIN LATERAL (
-                SELECT *
-                FROM squadov.vods
-                WHERE user_uuid = u.uuid
+                SELECT v.*
+                FROM squadov.vods AS v
+                INNER JOIN squadov.users AS uu
+                    ON v.user_uuid = uu.uuid
+                WHERE uu.id = $1
+                    AND v.match_uuid IS NOT NULL
+                    AND v.user_uuid IS NOT NULL
+                    AND v.start_time IS NOT NULL
+                    AND v.end_time IS NOT NULL
+                    AND COALESCE(v.end_time >= $7, TRUE)
+                    AND COALESCE(v.end_time <= $8, TRUE)
+                    AND v.is_clip = FALSE
+                    AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 UNION
                 SELECT v.*
                 FROM squadov.view_share_connections_access_users AS vi
@@ -276,8 +286,16 @@ impl api::ApiApplication {
                     ON v.video_uuid = vi.video_uuid
                 LEFT JOIN squadov.squad_role_assignments AS sra
                     ON sra.user_id = vi.source_user_id
-                WHERE vi.user_id = u.id
+                WHERE vi.user_id = $1
                     AND (CARDINALITY($5::BIGINT[]) = 0 OR sra.squad_id = ANY($5))
+                    AND v.match_uuid IS NOT NULL
+                    AND v.user_uuid IS NOT NULL
+                    AND v.start_time IS NOT NULL
+                    AND v.end_time IS NOT NULL
+                    AND COALESCE(v.end_time >= $7, TRUE)
+                    AND COALESCE(v.end_time <= $8, TRUE)
+                    AND v.is_clip = FALSE
+                    AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
             ) AS v
             INNER JOIN squadov.users AS vu
                 ON vu.uuid = v.user_uuid
@@ -341,18 +359,10 @@ impl api::ApiApplication {
             ) AS t1(s)
                 ON TRUE
             WHERE u.id = $1
-                AND v.match_uuid IS NOT NULL
-                AND v.user_uuid IS NOT NULL
-                AND v.start_time IS NOT NULL
-                AND v.end_time IS NOT NULL
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
-                AND COALESCE(v.end_time >= $7, TRUE)
-                AND COALESCE(v.end_time <= $8, TRUE)
                 AND (NOT $9::BOOLEAN OR ufm.match_uuid IS NOT NULL)
                 AND (NOT $10::BOOLEAN OR uwv.video_uuid IS NOT NULL)
-                AND v.is_clip = FALSE
-                AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 AND (NOT $12::BOOLEAN OR upv.video_uuid IS NOT NULL)
                 AND (CARDINALITY($13::VARCHAR[]) = 0 OR wmv.build_version LIKE ANY ($13))
                 AND (wmv.id IS NULL OR wmv.build_version NOT LIKE '9.%' OR (
