@@ -4802,6 +4802,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wow_match_view_data_backfill"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "chrono",
+ "env_logger 0.7.1",
+ "log",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "squadov_common",
+ "structopt",
+ "tokio",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "ws2_32-sys"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
