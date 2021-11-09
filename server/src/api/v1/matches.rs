@@ -313,51 +313,6 @@ impl api::ApiApplication {
             LEFT JOIN squadov.wow_match_view AS wmv
                 ON wmv.match_uuid = v.match_uuid
                     AND wmv.user_id = vu.id
-            LEFT JOIN squadov.wow_encounter_view AS wev
-                ON wev.view_id = wmv.id
-            LEFT JOIN squadov.wow_challenge_view AS wcv
-                ON wcv.view_id = wmv.id
-            LEFT JOIN squadov.wow_arena_view AS wav
-                ON wav.view_id = wmv.id
-            LEFT JOIN squadov.wow_instance_view AS wiv
-                ON wiv.view_id = wmv.id
-            LEFT JOIN LATERAL (
-                SELECT wcp.character_id
-                FROM squadov.wow_match_view_character_presence AS wcp
-                INNER JOIN squadov.wow_user_character_cache AS wucc
-                    ON wucc.user_id = vu.id
-                        AND wucc.unit_guid = wcp.unit_guid
-                WHERE wcp.view_id = wmv.id
-            ) AS wcp
-                ON TRUE
-            LEFT JOIN squadov.wow_match_view_combatants AS wvc
-                ON wvc.character_id = wcp.character_id
-            LEFT JOIN LATERAL (
-                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
-                FROM (
-                    SELECT MIN(wvc.spec_id)
-                    FROM squadov.wow_match_view_character_presence AS wcp
-                    INNER JOIN squadov.wow_match_view_combatants AS wvc
-                        ON wvc.character_id = wcp.character_id
-                    WHERE wcp.view_id = wmv.id
-                        AND wvc.team = 0
-                    GROUP BY wcp.view_id, wcp.unit_guid
-                ) sub(val)
-            ) AS t0(s)
-                ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
-                FROM (
-                    SELECT MIN(wvc.spec_id)
-                    FROM squadov.wow_match_view_character_presence AS wcp
-                    INNER JOIN squadov.wow_match_view_combatants AS wvc
-                        ON wvc.character_id = wcp.character_id
-                    WHERE wcp.view_id = wmv.id
-                        AND wvc.team = 1
-                    GROUP BY wcp.view_id, wcp.unit_guid
-                ) sub(val)
-            ) AS t1(s)
-                ON TRUE
             WHERE u.id = $1
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
@@ -365,48 +320,6 @@ impl api::ApiApplication {
                 AND (NOT $10::BOOLEAN OR uwv.video_uuid IS NOT NULL)
                 AND (NOT $12::BOOLEAN OR upv.video_uuid IS NOT NULL)
                 AND (CARDINALITY($13::VARCHAR[]) = 0 OR wmv.build_version LIKE ANY ($13))
-                AND (wmv.id IS NULL OR wmv.build_version NOT LIKE '9.%' OR (
-                    wmv.build_version LIKE '9.%'
-                        AND ((
-                                wev.view_id IS NOT NULL
-                                    AND (CARDINALITY($14::INTEGER[]) = 0 OR wev.instance_id = ANY($14))
-                                    AND (CARDINALITY($15::INTEGER[]) = 0 OR wev.encounter_id = ANY($15))
-                                    AND ($16::BOOLEAN IS NULL OR wev.success = $16)
-                                    AND (CARDINALITY($17::INTEGER[]) = 0 OR wev.difficulty = ANY($17))
-                                    AND (CARDINALITY($18::INTEGER[]) = 0 OR wvc.spec_id = ANY($18))
-                                    AND (t0.s ~ $19 OR t1.s ~ $19)
-                                    AND $34
-                            )
-                            OR (
-                                wcv.view_id IS NOT NULL
-                                    AND (CARDINALITY($20::INTEGER[]) = 0 OR wcv.instance_id = ANY($20)) 
-                                    AND ($21::BOOLEAN IS NULL OR wcv.success = $21)
-                                    AND ($22::INTEGER IS NULL OR wcv.keystone_level >= $22)
-                                    AND ($23::INTEGER IS NULL OR wcv.keystone_level <= $23)
-                                    AND (CARDINALITY($24::INTEGER[]) = 0 OR wvc.spec_id = ANY($24))
-                                    AND (t0.s ~ $25 OR t1.s ~ $25)
-                                    AND $35
-                            )
-                            OR (
-                                wav.view_id IS NOT NULL
-                                    AND (CARDINALITY($26::INTEGER[]) = 0 OR wav.instance_id = ANY($26))
-                                    AND (CARDINALITY($27::VARCHAR[]) = 0 OR wav.arena_type = ANY($27))
-                                    AND ($28::BOOLEAN IS NULL OR ((wav.winning_team_id = wvc.team) = $28))
-                                    AND (CARDINALITY($29::INTEGER[]) = 0 OR wvc.spec_id = ANY($29))
-                                    AND ($30::INTEGER IS NULL OR wvc.rating >= $30)
-                                    AND ($31::INTEGER IS NULL OR wvc.rating <= $31)
-                                    AND (
-                                        (t0.s ~ $32 AND t1.s ~ $33)
-                                        OR
-                                        (t0.s ~ $33 AND t1.s ~ $32)
-                                    )
-                                    AND $36
-                            )
-                            OR (
-                                wiv.view_id IS NOT NULL
-                            )
-                        )
-                ))
             ORDER BY v.end_time DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -429,33 +342,6 @@ impl api::ApiApplication {
             &filter.vods.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<Uuid>>(),
             needs_profile,
             &filter.get_wow_release_db_filter(),
-            // Wow retail encounter filters
-            &filter.filters.wow.encounters.raids.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            &filter.filters.wow.encounters.encounters.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            filter.filters.wow.encounters.is_winner,
-            &filter.filters.wow.encounters.encounter_difficulties.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            &filter.filters.wow.encounters.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            &filter.filters.wow.encounters.build_friendly_composition_filter()?,
-            // Wow retail keystone filters
-            &filter.filters.wow.keystones.dungeons.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            filter.filters.wow.keystones.is_winner,
-            filter.filters.wow.keystones.keystone_low,
-            filter.filters.wow.keystones.keystone_high,
-            &filter.filters.wow.keystones.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            &filter.filters.wow.keystones.build_friendly_composition_filter()?,
-            // Wow retail arena filters
-            &filter.filters.wow.arenas.arenas.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            &filter.filters.wow.arenas.brackets.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
-            filter.filters.wow.arenas.is_winner,
-            &filter.filters.wow.arenas.pov_spec.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x }).collect::<Vec<i32>>(),
-            filter.filters.wow.arenas.rating_low,
-            filter.filters.wow.arenas.rating_high,
-            &filter.filters.wow.arenas.build_friendly_composition_filter()?,
-            &filter.filters.wow.arenas.build_enemy_composition_filter()?,
-            // Wow game mode filter
-            &filter.filters.wow.encounters.enabled,
-            &filter.filters.wow.keystones.enabled,
-            &filter.filters.wow.arenas.enabled,
         )
             .fetch_all(&*self.pool)
             .await?

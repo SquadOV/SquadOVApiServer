@@ -30,7 +30,7 @@ pub struct SquadOvSquadMembership {
 }
 
 #[derive(Serialize, sqlx::Type, PartialEq, Debug)]
-#[sqlx(type_name="squad_role")]
+#[sqlx(rename="squad_role")]
 pub enum SquadRole {
     Owner,
     Member

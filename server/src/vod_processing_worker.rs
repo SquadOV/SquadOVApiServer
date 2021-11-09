@@ -23,7 +23,8 @@ struct Options {
 #[tokio::main]
 pub async fn main() -> Result<(), SquadOvError> {
     std::env::set_var("RUST_BACKTRACE", "1");
-    std::env::set_var("RUST_LOG", "info,sqlx=warn,vod_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info");
+    std::env::set_var("RUST_LOG", "info,vod_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info");
+    std::env::set_var("SQLX_LOG", "0");
     env_logger::init();
 
     let opts = Options::from_args();

@@ -7,8 +7,8 @@ application_id = "${FUSIONAUTH_CLIENT_ID}"
 
 [database]
 url = "${DATABASE_URL}"
-connections = 1024
-heavy_connections = 1024
+connections = 256
+heavy_connections = 128
 
 [cors]
 domain = "https://app.${DEPLOYMENT_DOMAIN}"

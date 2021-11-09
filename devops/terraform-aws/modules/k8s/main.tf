@@ -554,3 +554,33 @@ resource "aws_iam_policy" "eks_policy_autoscaler" {
 }
 POLICY
 }
+
+resource "aws_eks_node_group" "prometheus_nodes" {
+    cluster_name = aws_eks_cluster.primary_eks_cluster.name
+    node_group_name = "primary-eks-vod-nodes-secondary"
+    node_role_arn = aws_iam_role.eks_managed_role.arn
+    subnet_ids = var.default_fargate_subnets
+
+    capacity_type = "ON_DEMAND"
+    instance_types = [ "m5.xlarge" ]
+
+    labels = {
+        "task" = "prometheus"
+    }
+
+    scaling_config {
+        desired_size = 1
+        min_size = 1
+        max_size = 1
+    }
+
+    depends_on = [
+        aws_iam_role_policy_attachment.eks_managed_AmazonEKSWorkerNodePolicy,
+        aws_iam_role_policy_attachment.eks_managed_AmazonEKS_CNI_Policy,
+        aws_iam_role_policy_attachment.eks_managed_AmazonEC2ContainerRegistryReadOnly
+    ]
+
+    lifecycle {
+        ignore_changes = [scaling_config[0].desired_size]
+    }
+}

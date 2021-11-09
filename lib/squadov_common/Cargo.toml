@@ -21,7 +21,7 @@ reqwest = { version = "0.10", features = ["json"] }
 serde = { version = "1.0.116", features = ["derive"] }
 serde_json = "1.0.59"
 percent-encoding = "2.1.0"
-sqlx = { version = "0.5.9", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+sqlx = { path="../../deps/cargo/sqlx", version = "0.4.0-beta.1", default-features = false, features = [ "bigdecimal", "runtime-async-std", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
 ipnetwork = { version = "0.17.0", features = ["serde"] }
 juniper = { version = "0.15.2", features = ["scalar-naivetime"]}
 hex = "0.4.2"
