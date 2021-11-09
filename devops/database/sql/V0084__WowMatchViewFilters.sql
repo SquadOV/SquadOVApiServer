@@ -1,0 +1,5 @@
+ALTER TABLE wow_match_view
+ADD COLUMN player_rating INTEGER,
+ADD COLUMN player_spec INTEGER,
+ADD COLUMN t0_specs VARCHAR,
+ADD COLUMN t1_specs VARCHAR;
