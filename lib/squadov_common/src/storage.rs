@@ -36,6 +36,7 @@ where
 
     pub async fn get_bucket(&self, nm: &str) -> Option<T> {
         let buckets = self.buckets.read().await;
+        // Errors here somehow for speed_check
         buckets.get(nm).map(|x| { x.clone() })
     }
 

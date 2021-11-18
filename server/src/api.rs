@@ -31,6 +31,11 @@ use squadov_common::{
         FilesystemVodManager,
         S3VodManager,
     },
+    speed_check,
+    speed_check::manager::{
+        SpeedCheckManager,
+        S3SpeedCheckManager,
+    },
     csgo::rabbitmq::CsgoRabbitmqInterface,
     steam::{
         api::{SteamApiConfig, SteamApiClient},
@@ -198,6 +203,7 @@ pub struct SquadOvConfig {
 pub struct SquadOvStorageConfig {
     pub vods: CloudStorageBucketsConfig,
     pub blobs: CloudStorageBucketsConfig,
+    pub speed_check: CloudStorageBucketsConfig,
 }
 
 #[derive(Deserialize,Debug,Clone)]
@@ -233,6 +239,7 @@ pub struct ApiApplication {
     pub users: auth::UserManager,
     session: auth::SessionManager,
     vod: Arc<StorageManager<Arc<dyn VodManager + Send + Sync>>>,
+    speed_check: Arc<StorageManager<Arc<dyn SpeedCheckManager + Send + Sync>>>,
     pub pool: Arc<PgPool>,
     pub heavy_pool: Arc<PgPool>,
     schema: Arc<graphql::GraphqlSchema>,
@@ -303,6 +310,10 @@ impl ApiApplication {
         self.vod.get_bucket(bucket).await.ok_or(SquadOvError::NotFound)
     }
 
+    pub async fn get_speed_check_manager(&self, bucket: &str) -> Result<Arc<dyn SpeedCheckManager + Send + Sync>, SquadOvError> {
+        self.speed_check.get_bucket(bucket).await.ok_or(SquadOvError::NotFound)
+    }
+
     async fn create_vod_manager(&mut self, bucket: &str) -> Result<(), SquadOvError> {
         let vod_manager = match vod::manager::get_vod_manager_type(bucket) {
             VodManagerType::GCS => Arc::new(GCSVodManager::new(bucket, self.gcp.clone()).await?) as Arc<dyn VodManager + Send + Sync>,
@@ -310,6 +321,18 @@ impl ApiApplication {
             VodManagerType::FileSystem => Arc::new(FilesystemVodManager::new(bucket)?) as Arc<dyn VodManager + Send + Sync>
         };
         self.vod.new_bucket(bucket, vod_manager).await;
+        Ok(())
+    }
+
+    async fn create_speed_check_manager(&mut self, bucket: &str) -> Result<(), SquadOvError> {
+        let speed_check_manager = match speed_check::manager::get_speed_check_manager_type(bucket) {
+            // Everything is setup for S3, but the other managers will need to be setup if we want to expand the storage capabilities.
+            // I can add on to that before I close out this ticket, but for the purpose of getting someting to work, I'm just handling everything as an S3
+            VodManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            VodManagerType::GCS => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            VodManagerType::FileSystem => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+        };
+        self.speed_check.new_bucket(bucket, speed_check_manager).await;
         Ok(())
     }
 
@@ -415,6 +438,10 @@ impl ApiApplication {
         vod_manager.set_location_map(CloudStorageLocation::Global, &config.storage.vods.global);
         let vod_manager = Arc::new(vod_manager);
 
+        let mut speed_check_manager = StorageManager::<Arc<dyn SpeedCheckManager + Send + Sync>>::new();
+        speed_check_manager.set_location_map(CloudStorageLocation::Global, &config.storage.speed_check.global);
+        let speed_check_manager = Arc::new(speed_check_manager);
+
         let mut blob = StorageManager::<Arc<BlobManagementClient>>::new();
         blob.set_location_map(CloudStorageLocation::Global, &config.storage.blobs.global);
         let blob = Arc::new(blob);
@@ -436,6 +463,7 @@ impl ApiApplication {
             users: auth::UserManager{},
             session: auth::SessionManager::new(),
             vod: vod_manager,
+            speed_check: speed_check_manager,
             pool: pool.clone(),
             heavy_pool,
             schema: Arc::new(graphql::create_schema()),
@@ -471,6 +499,11 @@ impl ApiApplication {
         if config.storage.blobs.global != config.storage.blobs.legacy {
             app.create_blob_manager(&config.storage.blobs.legacy).await.unwrap();
         }
+
+        app.create_speed_check_manager(&config.storage.speed_check.global).await.unwrap();
+        // if config.storage.speed_check.global != config.storage.speed_check.legacy {
+        //     app.create_speed_check_manager(&config.storage.speed_check.legacy).await.unwrap();
+        // }
 
         app
     }

@@ -19,6 +19,7 @@ mod community;
 mod profile;
 mod sentry;
 mod twitch;
+mod speed_check;
 
 pub use user::*;
 pub use matches::*;
@@ -26,6 +27,7 @@ pub use aimlab::*;
 pub use hearthstone::*;
 pub use valorant::*;
 pub use vod::*;
+pub use speed_check::*;
 pub use squad::*;
 pub use bug::*;
 pub use wow::*;
@@ -48,4 +50,9 @@ use serde::Serialize;
 pub struct FavoriteResponse {
     favorite: bool,
     reason: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct SpeedCheckResponse {
+    speed_check: Option<f64>,
 }
