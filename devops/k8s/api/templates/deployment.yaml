@@ -31,11 +31,12 @@ spec:
                         path: /healthz
                         port: 8080
                     initialDelaySeconds: 30
+                    periodSeconds: 60
                     timeoutSeconds: 20
                   resources:
                     requests:
                         cpu: "1000m"
-                        memory: "4Gi"
+                        memory: "3Gi"
                   env:
                     - name: FFMPEG_BINARY_PATH
                       value: ffmpeg

@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 squadov_common = { path="../../lib/squadov_common" }
-sqlx = { version = "0.5.9", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+sqlx = { path="../../deps/cargo/sqlx", version = "0.4.0-beta.1", default-features = false, features = [ "bigdecimal", "runtime-async-std", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
 log = "0.4.0"
 env_logger = "0.7.1"
 structopt = "0.3"

@@ -266,9 +266,19 @@ impl api::ApiApplication {
             SELECT DISTINCT v.match_uuid AS "match_uuid!", v.user_uuid AS "uuid!", v.end_time
             FROM squadov.users AS u
             CROSS JOIN LATERAL (
-                SELECT *
-                FROM squadov.vods
-                WHERE user_uuid = u.uuid
+                SELECT v.*
+                FROM squadov.vods AS v
+                INNER JOIN squadov.users AS uu
+                    ON v.user_uuid = uu.uuid
+                WHERE uu.id = $1
+                    AND v.match_uuid IS NOT NULL
+                    AND v.user_uuid IS NOT NULL
+                    AND v.start_time IS NOT NULL
+                    AND v.end_time IS NOT NULL
+                    AND COALESCE(v.end_time >= $7, TRUE)
+                    AND COALESCE(v.end_time <= $8, TRUE)
+                    AND v.is_clip = FALSE
+                    AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 UNION
                 SELECT v.*
                 FROM squadov.view_share_connections_access_users AS vi
@@ -276,8 +286,16 @@ impl api::ApiApplication {
                     ON v.video_uuid = vi.video_uuid
                 LEFT JOIN squadov.squad_role_assignments AS sra
                     ON sra.user_id = vi.source_user_id
-                WHERE vi.user_id = u.id
+                WHERE vi.user_id = $1
                     AND (CARDINALITY($5::BIGINT[]) = 0 OR sra.squad_id = ANY($5))
+                    AND v.match_uuid IS NOT NULL
+                    AND v.user_uuid IS NOT NULL
+                    AND v.start_time IS NOT NULL
+                    AND v.end_time IS NOT NULL
+                    AND COALESCE(v.end_time >= $7, TRUE)
+                    AND COALESCE(v.end_time <= $8, TRUE)
+                    AND v.is_clip = FALSE
+                    AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
             ) AS v
             INNER JOIN squadov.users AS vu
                 ON vu.uuid = v.user_uuid
@@ -303,56 +321,11 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
-            LEFT JOIN LATERAL (
-                SELECT wcp.character_id
-                FROM squadov.wow_match_view_character_presence AS wcp
-                INNER JOIN squadov.wow_user_character_cache AS wucc
-                    ON wucc.user_id = vu.id
-                        AND wucc.unit_guid = wcp.unit_guid
-                WHERE wcp.view_id = wmv.id
-            ) AS wcp
-                ON TRUE
-            LEFT JOIN squadov.wow_match_view_combatants AS wvc
-                ON wvc.character_id = wcp.character_id
-            LEFT JOIN LATERAL (
-                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
-                FROM (
-                    SELECT MIN(wvc.spec_id)
-                    FROM squadov.wow_match_view_character_presence AS wcp
-                    INNER JOIN squadov.wow_match_view_combatants AS wvc
-                        ON wvc.character_id = wcp.character_id
-                    WHERE wcp.view_id = wmv.id
-                        AND wvc.team = 0
-                    GROUP BY wcp.view_id, wcp.unit_guid
-                ) sub(val)
-            ) AS t0(s)
-                ON TRUE
-            LEFT JOIN LATERAL (
-                SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
-                FROM (
-                    SELECT MIN(wvc.spec_id)
-                    FROM squadov.wow_match_view_character_presence AS wcp
-                    INNER JOIN squadov.wow_match_view_combatants AS wvc
-                        ON wvc.character_id = wcp.character_id
-                    WHERE wcp.view_id = wmv.id
-                        AND wvc.team = 1
-                    GROUP BY wcp.view_id, wcp.unit_guid
-                ) sub(val)
-            ) AS t1(s)
-                ON TRUE
             WHERE u.id = $1
-                AND v.match_uuid IS NOT NULL
-                AND v.user_uuid IS NOT NULL
-                AND v.start_time IS NOT NULL
-                AND v.end_time IS NOT NULL
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
-                AND COALESCE(v.end_time >= $7, TRUE)
-                AND COALESCE(v.end_time <= $8, TRUE)
                 AND (NOT $9::BOOLEAN OR ufm.match_uuid IS NOT NULL)
                 AND (NOT $10::BOOLEAN OR uwv.video_uuid IS NOT NULL)
-                AND v.is_clip = FALSE
-                AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
                 AND (NOT $12::BOOLEAN OR upv.video_uuid IS NOT NULL)
                 AND (CARDINALITY($13::VARCHAR[]) = 0 OR wmv.build_version LIKE ANY ($13))
                 AND (wmv.id IS NULL OR wmv.build_version NOT LIKE '9.%' OR (
@@ -363,8 +336,8 @@ impl api::ApiApplication {
                                     AND (CARDINALITY($15::INTEGER[]) = 0 OR wev.encounter_id = ANY($15))
                                     AND ($16::BOOLEAN IS NULL OR wev.success = $16)
                                     AND (CARDINALITY($17::INTEGER[]) = 0 OR wev.difficulty = ANY($17))
-                                    AND (CARDINALITY($18::INTEGER[]) = 0 OR wvc.spec_id = ANY($18))
-                                    AND (t0.s ~ $19 OR t1.s ~ $19)
+                                    AND (CARDINALITY($18::INTEGER[]) = 0 OR wmv.player_spec = ANY($18))
+                                    AND (COALESCE(wmv.t0_specs, '') ~ $19 OR COALESCE(wmv.t1_specs, '') ~ $19)
                                     AND $34
                             )
                             OR (
@@ -373,22 +346,22 @@ impl api::ApiApplication {
                                     AND ($21::BOOLEAN IS NULL OR wcv.success = $21)
                                     AND ($22::INTEGER IS NULL OR wcv.keystone_level >= $22)
                                     AND ($23::INTEGER IS NULL OR wcv.keystone_level <= $23)
-                                    AND (CARDINALITY($24::INTEGER[]) = 0 OR wvc.spec_id = ANY($24))
-                                    AND (t0.s ~ $25 OR t1.s ~ $25)
+                                    AND (CARDINALITY($24::INTEGER[]) = 0 OR wmv.player_spec = ANY($24))
+                                    AND (COALESCE(wmv.t0_specs, '') ~ $25 OR COALESCE(wmv.t1_specs, '') ~ $25)
                                     AND $35
                             )
                             OR (
                                 wav.view_id IS NOT NULL
                                     AND (CARDINALITY($26::INTEGER[]) = 0 OR wav.instance_id = ANY($26))
                                     AND (CARDINALITY($27::VARCHAR[]) = 0 OR wav.arena_type = ANY($27))
-                                    AND ($28::BOOLEAN IS NULL OR ((wav.winning_team_id = wvc.team) = $28))
-                                    AND (CARDINALITY($29::INTEGER[]) = 0 OR wvc.spec_id = ANY($29))
-                                    AND ($30::INTEGER IS NULL OR wvc.rating >= $30)
-                                    AND ($31::INTEGER IS NULL OR wvc.rating <= $31)
+                                    AND ($28::BOOLEAN IS NULL OR ((wav.winning_team_id = wmv.player_team) = $28))
+                                    AND (CARDINALITY($29::INTEGER[]) = 0 OR wmv.player_spec = ANY($29))
+                                    AND ($30::INTEGER IS NULL OR wmv.player_rating >= $30)
+                                    AND ($31::INTEGER IS NULL OR wmv.player_rating <= $31)
                                     AND (
-                                        (t0.s ~ $32 AND t1.s ~ $33)
+                                        (COALESCE(wmv.t0_specs, '') ~ $32 AND COALESCE(wmv.t1_specs, '') ~ $33)
                                         OR
-                                        (t0.s ~ $33 AND t1.s ~ $32)
+                                        (COALESCE(wmv.t0_specs, '') ~ $33 AND COALESCE(wmv.t1_specs, '') ~ $32)
                                     )
                                     AND $36
                             )
@@ -447,7 +420,7 @@ impl api::ApiApplication {
             &filter.filters.wow.keystones.enabled,
             &filter.filters.wow.arenas.enabled,
         )
-            .fetch_all(&*self.pool)
+            .fetch_all(&*self.heavy_pool)
             .await?
             .into_iter()
             .map(|x| {

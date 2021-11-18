@@ -1294,6 +1294,76 @@ impl api::ApiApplication {
 
         Ok(())
     }
+
+    
+    pub async fn finish_wow_match_view(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid) -> Result<(), SquadOvError> {
+        // Need to populate player_rating, player_spec, t0_specs, and t1_specs in wow_match_view so that
+        // we can provide easy filtering on them.
+        sqlx::query!(
+            r#"
+            UPDATE squadov.wow_match_view AS wmv
+            SET player_rating = sub.player_rating,
+                player_spec = sub.player_spec,
+                player_team = sub.player_team,
+                t0_specs = sub.t0_specs,
+                t1_specs = sub.t1_specs
+            FROM (
+                SELECT
+                    wmv.id,
+                    wvc.spec_id AS "player_spec",
+                    wvc.rating AS "player_rating",
+                    wvc.team AS "player_team",
+                    t0.s AS "t0_specs",
+                    t1.s AS "t1_specs"
+                FROM squadov.wow_match_view AS wmv
+                LEFT JOIN LATERAL (
+                    SELECT wcp.character_id
+                    FROM squadov.wow_match_view_character_presence AS wcp
+                    INNER JOIN squadov.wow_user_character_cache AS wucc
+                        ON wucc.user_id = wmv.user_id
+                            AND wucc.unit_guid = wcp.unit_guid
+                    WHERE wcp.view_id = wmv.id
+                ) AS wcp
+                    ON TRUE
+                LEFT JOIN squadov.wow_match_view_combatants AS wvc
+                    ON wvc.character_id = wcp.character_id
+                LEFT JOIN LATERAL (
+                    SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                    FROM (
+                        SELECT MIN(wvc.spec_id)
+                        FROM squadov.wow_match_view_character_presence AS wcp
+                        INNER JOIN squadov.wow_match_view_combatants AS wvc
+                            ON wvc.character_id = wcp.character_id
+                        WHERE wcp.view_id = wmv.id
+                            AND wvc.team = 0
+                        GROUP BY wcp.view_id, wcp.unit_guid
+                    ) sub(val)
+                ) AS t0(s)
+                    ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT ',' || STRING_AGG(val::VARCHAR, ',') || ',' AS vv
+                    FROM (
+                        SELECT MIN(wvc.spec_id)
+                        FROM squadov.wow_match_view_character_presence AS wcp
+                        INNER JOIN squadov.wow_match_view_combatants AS wvc
+                            ON wvc.character_id = wcp.character_id
+                        WHERE wcp.view_id = wmv.id
+                            AND wvc.team = 1
+                        GROUP BY wcp.view_id, wcp.unit_guid
+                    ) sub(val)
+                ) AS t1(s)
+                    ON TRUE
+                WHERE wmv.id = $1
+            ) AS sub
+            WHERE sub.id = wmv.id
+            "#,
+            view_uuid,
+        )
+            .execute(tx)
+            .await?;
+
+        Ok(())
+    }
 }
 
 pub async fn create_wow_encounter_match_handler(app : web::Data<Arc<api::ApiApplication>>, input_match: web::Json<GenericMatchCreationRequest<WoWEncounterStart>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
@@ -1359,7 +1429,8 @@ pub async fn finish_wow_encounter_handler(app : web::Data<Arc<api::ApiApplicatio
             }
         };
         app.finish_wow_encounter_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp, &data.data).await?;
-        
+        app.finish_wow_match_view(&mut tx, &path.view_uuid).await?;
+
         tx.commit().await?;
         return Ok(HttpResponse::Ok().json(match_uuid));
     }
@@ -1416,7 +1487,8 @@ pub async fn finish_wow_instance_handler(app : web::Data<Arc<api::ApiApplication
             }
         };
         app.finish_wow_generic_match_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp).await?;
-        
+        app.finish_wow_match_view(&mut tx, &path.view_uuid).await?;
+
         tx.commit().await?;
         return Ok(HttpResponse::Ok().json(match_uuid));
     }
@@ -1465,7 +1537,8 @@ pub async fn finish_wow_challenge_handler(app : web::Data<Arc<api::ApiApplicatio
             }
         };
         app.finish_wow_challenge_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp, &data.data).await?;
-        
+        app.finish_wow_match_view(&mut tx, &path.view_uuid).await?;
+
         tx.commit().await?;
         return Ok(HttpResponse::Ok().json(match_uuid));
     }
@@ -1496,7 +1569,8 @@ pub async fn finish_wow_arena_handler(app : web::Data<Arc<api::ApiApplication>>,
             }
         };
         app.finish_wow_arena_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp, &data.data).await?;
-        
+        app.finish_wow_match_view(&mut tx, &path.view_uuid).await?;
+
         tx.commit().await?;
         return Ok(HttpResponse::Ok().json(match_uuid));
     }

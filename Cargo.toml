@@ -5,6 +5,7 @@ members = [
     "tools/hearthstone_power_parser",
     "tools/csgo_demo_parser",
     "tools/wow_match_transfer",
+    "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler"
 ]
@@ -14,7 +15,8 @@ default-members = [
     "tools/hearthstone_power_parser",
     "tools/csgo_demo_parser",
     "tools/wow_match_transfer",
+    "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler"
 ]
-exclude = ["deps/cargo/rust-petname"]
+exclude = ["deps/cargo/rust-petname", "deps/cargo/sqlx"]
