@@ -68,6 +68,7 @@ use squadov_common::{
         },
         oauth,
     },
+    config::CommonConfig,
 };
 use url::Url;
 use std::vec::Vec;
@@ -221,6 +222,25 @@ pub struct ApiConfig {
     pub ipstack: IpstackConfig,
     pub segment: SegmentConfig,
     pub sentry: SentryConfig,
+}
+
+impl CommonConfig for DatabaseConfig {
+    fn read_from_env(&mut self) {
+        if let Ok(connections) = std::env::var("SQUADOV_DB_CONNECTIONS") {
+            self.connections = connections.parse::<u32>().unwrap_or(self.connections);
+        }
+
+        if let Ok(connections) = std::env::var("SQUADOV_DB_HEAVY_CONNECTIONS") {
+            self.heavy_connections = connections.parse::<u32>().unwrap_or(self.heavy_connections);
+        }
+    }
+}
+
+impl CommonConfig for ApiConfig {
+    fn read_from_env(&mut self) {
+        self.fusionauth.read_from_env();
+        self.database.read_from_env();
+    }
 }
 
 pub struct ApiClients {

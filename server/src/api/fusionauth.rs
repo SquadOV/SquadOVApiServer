@@ -6,6 +6,7 @@ mod mfa;
 
 use serde::{Deserialize};
 use reqwest::header;
+use squadov_common::config::CommonConfig;
 
 #[derive(Deserialize,Debug,Clone)]
 pub struct FusionAuthConfig {
@@ -14,6 +15,18 @@ pub struct FusionAuthConfig {
     api_key: String,
     tenant_id: String,
     application_id: String,   
+}
+
+impl CommonConfig for FusionAuthConfig {
+    fn read_from_env(&mut self) {
+        if let Ok(host) = std::env::var("SQUADOV_FUSIONAUTH_HOST") {
+            self.host = host;
+        }
+
+        if let Ok(port) = std::env::var("SQUADOV_FUSIONAUTH_PORT") {
+            self.port = port.parse::<u16>().unwrap_or(self.port);
+        }
+    }
 }
 
 pub struct FusionAuthClient {
