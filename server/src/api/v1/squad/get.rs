@@ -3,7 +3,17 @@ use crate::api;
 use crate::api::auth::{SquadOVSession};
 use crate::api::v1::UserResourcePath;
 use std::sync::Arc;
-use squadov_common::{SquadOvError, SquadOvSquad, SquadRole, SquadOvSquadMembership};
+use squadov_common::{
+    SquadOvError,
+    SquadOvSquad,
+    SquadRole,
+    SquadOvSquadMembership,
+    SquadSharingSettings,
+    SquadWowSharingSettings,
+    SquadOvGames,
+};
+use std::convert::TryFrom;
+use sqlx::{Transaction, Postgres};
 
 impl api::ApiApplication {
     pub async fn get_squad(&self, squad_id: i64) -> Result<SquadOvSquad, SquadOvError> {
@@ -264,6 +274,111 @@ impl api::ApiApplication {
                 .await?
         )
     }
+
+    pub async fn get_squad_sharing_settings(&self, squad_id: i64) -> Result<SquadSharingSettings, SquadOvError> {
+        Ok(
+            SquadSharingSettings{
+                disabled_games: sqlx::query!(
+                    "
+                    SELECT disabled_game
+                    FROM squadov.squad_sharing_games_filter
+                    WHERE squad_id = $1
+                    ",
+                    squad_id,
+                )
+                    .fetch_all(&*self.pool)
+                    .await?
+                    .into_iter()
+                    .map(|x| { Ok(SquadOvGames::try_from(x.disabled_game)?) })
+                    .collect::<Result<Vec<SquadOvGames>, SquadOvError>>()?,
+                wow: sqlx::query_as!(
+                    SquadWowSharingSettings,
+                    "
+                    SELECT
+                        disable_encounters,
+                        disable_dungeons,
+                        disable_keystones,
+                        disable_arenas,
+                        disable_bgs
+                    FROM squadov.squad_sharing_wow_filters
+                    WHERE squad_id = $1
+                    ",
+                    squad_id
+                )
+                    .fetch_optional(&*self.pool)
+                    .await?
+                    .unwrap_or(SquadWowSharingSettings::default())
+            }
+        )
+    }
+
+    pub async fn update_squad_sharing_settings(&self, tx : &mut Transaction<'_, Postgres>, squad_id: i64, settings: &SquadSharingSettings) -> Result<(), SquadOvError> {
+        // Need to delete everything from squad_sharing_games_filter and then insert again
+        // so we get make sure that the input disabled_games vec is authoritative.
+        sqlx::query!(
+            "
+            DELETE FROM squadov.squad_sharing_games_filter
+            WHERE squad_id = $1
+            ",
+            squad_id
+        )
+            .execute(&mut *tx)
+            .await?;
+
+        sqlx::query!(
+            "
+            INSERT INTO squadov.squad_sharing_games_filter (
+                squad_id,
+                disabled_game
+            )
+            SELECT $1, t.id
+            FROM UNNEST($2::INTEGER[]) AS t(id)
+            ON CONFLICT DO NOTHING
+            ",
+            squad_id,
+            &settings.disabled_games.iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
+        )
+            .execute(&mut *tx)
+            .await?;
+
+        // Need to create the entry for the wow filters in the database if it doesn't already exist.
+        sqlx::query!(
+            "
+            INSERT INTO squadov.squad_sharing_wow_filters (
+                squad_id,
+                disable_arenas,
+                disable_bgs,
+                disable_dungeons,
+                disable_encounters,
+                disable_keystones
+            )
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6
+            )
+            ON CONFLICT (squad_id) DO UPDATE SET
+                disable_arenas = EXCLUDED.disable_arenas,
+                disable_bgs = EXCLUDED.disable_bgs,
+                disable_dungeons = EXCLUDED.disable_dungeons,
+                disable_encounters = EXCLUDED.disable_encounters,
+                disable_keystones = EXCLUDED.disable_keystones
+            ",
+            squad_id,
+            settings.wow.disable_arenas,
+            settings.wow.disable_bgs,
+            settings.wow.disable_dungeons,
+            settings.wow.disable_encounters,
+            settings.wow.disable_keystones,
+        )
+            .execute(&mut *tx)
+            .await?;
+        
+        Ok(())
+    }
 }
 
 pub async fn get_squad_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::SquadSelectionInput>) -> Result<HttpResponse, SquadOvError> {
@@ -290,4 +405,17 @@ pub async fn get_user_discover_squads_handler(app : web::Data<Arc<api::ApiApplic
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
     Ok(HttpResponse::Ok().json(&app.get_discover_squads(session.user.id).await?))
+}
+
+pub async fn get_squad_share_settings_handler(app : web::Data<Arc<api::ApiApplication>>, path : web::Path<super::SquadSelectionInput>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(
+        &app.get_squad_sharing_settings(path.squad_id).await?
+    ))
+}
+
+pub async fn update_squad_share_settings_handler(app : web::Data<Arc<api::ApiApplication>>, path : web::Path<super::SquadSelectionInput>, data: web::Json<SquadSharingSettings>) -> Result<HttpResponse, SquadOvError> {
+    let mut tx = app.pool.begin().await?;
+    app.update_squad_sharing_settings(&mut tx, path.squad_id, &data).await?;
+    tx.commit().await?;
+    Ok(HttpResponse::NoContent().finish())
 }
