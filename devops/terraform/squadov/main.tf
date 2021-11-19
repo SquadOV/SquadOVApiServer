@@ -21,14 +21,6 @@ provider "google" {
     ]
 }
 
-module "database" {
-    source = "../modules/database"
-
-    postgres_user = var.postgres_user
-    postgres_password = var.postgres_password
-    postgres_instance_name = var.postgres_instance_name
-}
-
 module "vm" {
     source = "../modules/vm"
 

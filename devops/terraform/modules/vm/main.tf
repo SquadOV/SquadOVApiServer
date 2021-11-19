@@ -24,6 +24,17 @@ resource "google_storage_bucket" "vod-storage-bucket" {
             storage_class = "COLDLINE"
         }
     }
+
+    lifecycle_rule {
+        condition {
+            age = 60
+        }
+
+        action {
+            type = "SetStorageClass"
+            storage_class = "ARCHIVE"
+        }
+    }
 }
 
 resource "google_storage_bucket" "blob-storage-bucket" {
