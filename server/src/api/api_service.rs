@@ -263,6 +263,10 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                     web::scope("/oauth")
                                         .route("/twitch", web::get().to(v1::get_twitch_login_url_handler))
                                 )
+                                .service(
+                                    web::scope("/discover")
+                                        .route("/squads", web::get().to(v1::get_user_discover_squads_handler))
+                                )
                         )
                         .service(
                             web::scope("/{user_id}")
@@ -999,6 +1003,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 // Metadata about the squad should be public (without access checks besides being logged in
                                 // so that people can know what squads they're being invited to.
                                 .route("/profile", web::get().to(v1::get_squad_handler))
+                                .route("/join", web::post().to(v1::join_public_squad_handler))
                                 // Member-only endpoints
                                 .service(
                                     web::scope("")

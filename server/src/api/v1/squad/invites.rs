@@ -608,3 +608,21 @@ pub async fn use_link_to_join_squad_handler(app : web::Data<Arc<api::ApiApplicat
 
     Ok(HttpResponse::NoContent().finish())
 }
+
+pub async fn join_public_squad_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::SquadSelectionInput>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+
+    let squad = app.get_squad(path.squad_id).await?;
+    Ok(
+        if squad.is_public && squad.is_discoverable {
+            let mut tx = app.pool.begin().await?;
+            app.force_add_user_to_squad(&mut tx, path.squad_id, session.user.id).await?;
+            tx.commit().await?;
+            HttpResponse::NoContent().finish()
+        } else {
+            return Err(SquadOvError::Unauthorized);
+        }
+    )
+
+}

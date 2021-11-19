@@ -8,16 +8,15 @@ use unicode_segmentation::UnicodeSegmentation;
 use sqlx::{Executor, Postgres};
 
 #[derive(Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct SquadOvSquad {
     pub id: i64,
-    #[serde(rename="squadName")]
     pub squad_name: String,
-    #[serde(rename="creationTime")]
     pub creation_time: DateTime<Utc>,
-    #[serde(rename="memberCount")]
     pub member_count: i64,
-    #[serde(rename="pendingInviteCount")]
-    pub pending_invite_count: i64
+    pub pending_invite_count: i64,
+    pub is_public: bool,
+    pub is_discoverable: bool,
 }
 
 #[derive(Serialize)]
