@@ -4,7 +4,7 @@ use std::collections::{HashSet, HashMap};
 use actix_web_actors::ws;
 use actix::prelude::*;
 use crate::{
-    games::SquadOvGames,
+    games::{FullSupportedGame},
     session::SessionVerifier,
 };
 use serde::{Serialize, Deserialize};
@@ -26,7 +26,7 @@ pub enum Activity {
 #[derive(Clone,Serialize,Deserialize,Debug)]
 struct UserActivityState {
     activity: Activity,
-    game: Vec<SquadOvGames>,
+    game: Vec<FullSupportedGame>,
 }
 
 impl Default for UserActivityState {
@@ -314,7 +314,7 @@ pub enum UserActivityMessage {
     },
     StatusChange{
         activity: Activity,
-        game: Vec<SquadOvGames>,
+        game: Vec<FullSupportedGame>,
     }
 }
 

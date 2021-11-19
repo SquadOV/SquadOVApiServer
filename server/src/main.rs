@@ -19,6 +19,7 @@ use tokio::{
     runtime::Builder,
     task::LocalSet,
 };
+use squadov_common::config::CommonConfig;
 
 #[derive(StructOpt, Debug)]
 struct Options {
@@ -48,7 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio_rt.block_on(actix_set.run_until(async move {  
         let opts = Options::from_args();
         let raw_cfg = fs::read_to_string(opts.config).unwrap();
-        let config : api::ApiConfig = toml::from_str(&raw_cfg).unwrap();
+        let mut config : api::ApiConfig = toml::from_str(&raw_cfg).unwrap();
+        config.read_from_env();
 
         let mut kafka_config = ClientConfig::new();
         kafka_config.set("bootstrap.servers", &config.kafka.bootstrap_servers);
