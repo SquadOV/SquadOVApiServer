@@ -28,8 +28,6 @@ pub trait SpeedCheckManager {
     async fn start_speed_check_upload(&self, file_name_uuid: &Uuid) -> Result<String, SquadOvError>;
     // User can request to get a separate URL for each uploaded segment (though it isn't necessarily guaranteed to be different for each segment).
     async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<String, SquadOvError>;
-    // At the end, the user may need to finish the segment upload by giving us the session id as well as a list of parts that were uploaded.
-    async fn finish_speed_check_upload(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<(), SquadOvError>;
-
+    
     async fn delete_speed_check(&self, file_name_uuid: &Uuid) -> Result<(), SquadOvError>; 
 }

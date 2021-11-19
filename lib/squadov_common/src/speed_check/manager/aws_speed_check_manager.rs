@@ -94,16 +94,4 @@ impl SpeedCheckManager for S3SpeedCheckManager {
             expires_in: std::time::Duration::from_secs(43200)
         }))
     }
-
-    async fn finish_speed_check_upload(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<(), SquadOvError> {
-        let req = CompleteMultipartUploadRequest{
-            bucket: self.bucket.clone(),
-            key: file_name_uuid.to_string(),
-            upload_id: session_id.to_string(),
-            ..CompleteMultipartUploadRequest::default()
-        };
-
-        (*self.aws).as_ref().unwrap().s3.complete_multipart_upload(req).await?;
-        Ok(())
-    }
 }

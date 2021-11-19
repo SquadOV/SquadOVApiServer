@@ -6,6 +6,10 @@ resource "aws_cloudfront_origin_access_identity" "private_blob_access_identity" 
     comment = "For Signed URL access to Blobs"
 }
 
+resource "aws_cloudfront_origin_access_identity" "private_speed_check_access_identity" {
+    comment = "For Signed URL access to Speed Check Objects"
+}
+
 resource "aws_cloudfront_origin_access_identity" "public_vod_access_identity" {    
     comment = "For public access to VODs"
 }
@@ -96,6 +100,75 @@ data "aws_iam_policy_document" "vod_access_policy" {
 resource "aws_s3_bucket_policy" "vod_bucket_policy" {
     bucket = aws_s3_bucket.vod_storage_bucket.id
     policy = data.aws_iam_policy_document.vod_access_policy.json
+}
+
+resource "aws_s3_bucket" "speed_check_storage_bucket" {
+    bucket = "squadov-us-speed-check-bucket${var.bucket_suffix}"
+    acl = "private"
+
+    lifecycle_rule {
+        enabled = true
+        abort_incomplete_multipart_upload_days = 1
+        transition {
+            days = 30
+            storage_class = "STANDARD_IA"
+        }
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            apply_server_side_encryption_by_default {
+                sse_algorithm = "AES256"
+            }
+        }
+    }
+
+    tags = {
+        "s3" = "speed_check"
+        "speed_check" = "raw_s3"
+    }
+}
+
+data "aws_iam_policy_document" "speed_check_access_policy" {
+
+    statement {
+        actions = ["s3:GetObject"]
+        effect = "Allow"
+
+        principals {
+            type = "AWS"
+            identifiers = [aws_cloudfront_origin_access_identity.private_speed_check_access_identity.iam_arn]
+        }
+
+        resources = [ "${aws_s3_bucket.speed_check_storage_bucket.arn}/*"]
+
+        sid = "cloudfront-private-access"
+    }
+
+    statement {
+        actions = ["s3:*"]
+        effect = "Deny"
+
+        principals {
+            type = "*"
+            identifiers = ["*"]
+        }
+
+        condition {
+            test = "Bool"
+            values = ["false"]
+            variable = "aws:SecureTransport"
+        }
+
+        resources = [ aws_s3_bucket.speed_check_storage_bucket.arn, "${aws_s3_bucket.speed_check_storage_bucket.arn}/*"]
+
+        sid = "enforce-ssl"
+    }
+}
+
+resource "aws_s3_bucket_policy" "speed_check_storage_bucket_policy" {
+    bucket = aws_s3_bucket.speed_check_storage_bucket.id
+    policy = data.aws_iam_policy_document.speed_check_access_policy.json
 }
 
 resource "aws_s3_bucket" "blob_storage_bucket" {
