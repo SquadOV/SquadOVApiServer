@@ -51,8 +51,3 @@ pub struct FavoriteResponse {
     favorite: bool,
     reason: Option<String>,
 }
-
-#[derive(Serialize)]
-pub struct SpeedCheckResponse {
-    speed_check: Option<f64>,
-}

@@ -328,9 +328,9 @@ impl ApiApplication {
         let speed_check_manager = match speed_check::manager::get_speed_check_manager_type(bucket) {
             // Everything is setup for S3, but the other managers will need to be setup if we want to expand the storage capabilities.
             // I can add on to that before I close out this ticket, but for the purpose of getting someting to work, I'm just handling everything as an S3
-            VodManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
-            VodManagerType::GCS => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
-            VodManagerType::FileSystem => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            VodManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            VodManagerType::GCS => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            VodManagerType::FileSystem => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
         };
         self.speed_check.new_bucket(bucket, speed_check_manager).await;
         Ok(())
@@ -501,9 +501,6 @@ impl ApiApplication {
         }
 
         app.create_speed_check_manager(&config.storage.speed_check.global).await.unwrap();
-        // if config.storage.speed_check.global != config.storage.speed_check.legacy {
-        //     app.create_speed_check_manager(&config.storage.speed_check.legacy).await.unwrap();
-        // }
 
         app
     }

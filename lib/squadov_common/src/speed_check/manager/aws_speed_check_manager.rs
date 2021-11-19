@@ -3,7 +3,6 @@ use crate::{
     speed_check::manager::SpeedCheckManager,
     aws::{
         AWSClient,
-        AWSCDNConfig,
     },
 };
 use uuid::Uuid;
@@ -12,7 +11,7 @@ use rusoto_s3::{
     S3,
     CreateMultipartUploadRequest,
     UploadPartRequest,
-    CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
+    DeleteObjectRequest,
     util::{
         PreSignedRequest,
         PreSignedRequestOption,
@@ -26,11 +25,10 @@ const S3_URI_PREFIX : &'static str = "s3://";
 pub struct S3SpeedCheckManager {
     bucket: String,
     aws: Arc<Option<AWSClient>>,
-    cdn: AWSCDNConfig,
 }
 
 impl S3SpeedCheckManager {
-    pub async fn new(full_bucket: &str, client: Arc<Option<AWSClient>>, cdn: AWSCDNConfig) -> Result<S3SpeedCheckManager, SquadOvError> {
+    pub async fn new(full_bucket: &str, client: Arc<Option<AWSClient>>) -> Result<S3SpeedCheckManager, SquadOvError> {
         if client.is_none() {
             return Err(SquadOvError::InternalError(String::from("AWS Client not found.")));
         }
@@ -40,7 +38,6 @@ impl S3SpeedCheckManager {
         Ok(S3SpeedCheckManager{
             bucket: bucket.clone(),
             aws: client,
-            cdn,
         })
     }
 
@@ -69,6 +66,17 @@ impl SpeedCheckManager for S3SpeedCheckManager {
             Err(SquadOvError::InternalError(String::from("No AWS upload ID returned for multipart upload")))
         }
     }
+
+    async fn delete_speed_check(&self, file_name_uuid: &Uuid) -> Result<(), SquadOvError> {
+        let req = DeleteObjectRequest{
+            bucket: self.bucket.clone(),
+            key: file_name_uuid.to_string(),
+            ..DeleteObjectRequest::default()
+        };
+
+        (*self.aws).as_ref().unwrap().s3.delete_object(req).await?;
+        Ok(())
+    }
     
     async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str, part: i64) -> Result<String, SquadOvError> {
         let req = UploadPartRequest{
@@ -85,25 +93,5 @@ impl SpeedCheckManager for S3SpeedCheckManager {
         Ok(req.get_presigned_url(&region, &creds, &PreSignedRequestOption{
             expires_in: std::time::Duration::from_secs(43200)
         }))
-    }
-
-    async fn finish_speed_check_upload(&self, file_name_uuid: &Uuid, session_id: &str, parts: &[String]) -> Result<(), SquadOvError> {
-        let req = CompleteMultipartUploadRequest{
-            bucket: self.bucket.clone(),
-            key: file_name_uuid.to_string(),
-            multipart_upload: Some(CompletedMultipartUpload{
-                parts: Some(parts.iter().enumerate().map(|(idx, x)| {
-                    CompletedPart {
-                        e_tag: Some(x.clone()),
-                        part_number: Some(idx as i64 + 1),
-                    }
-                }).collect()),
-            }),
-            upload_id: session_id.to_string(),
-            ..CompleteMultipartUploadRequest::default()
-        };
-
-        (*self.aws).as_ref().unwrap().s3.complete_multipart_upload(req).await?;
-        Ok(())
     }
 }

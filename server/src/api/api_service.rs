@@ -148,7 +148,8 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                         .service(
                             web::scope("/{file_name_uuid}")
                                 .route("", web::get().to(v1::get_upload_speed_check_path_handler))
-                                .route("/update", web::post().to(v1::update_user_speed_check_handler))
+                                .route("", web::post().to(v1::update_user_speed_check_handler))
+                                .route("", web::delete().to(v1::clean_up_speed_check_on_cloud_handler))
                         )
                 )
                 .service(
