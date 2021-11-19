@@ -43,7 +43,7 @@ impl api::ApiApplication {
         let bucket = self.speed_check.get_bucket_for_location(CloudStorageLocation::Global).ok_or(SquadOvError::InternalError(String::from("No global storage location configured for Speed Check storage.")))?;
         let manager = self.get_speed_check_manager(&bucket).await?;
         let session_id = manager.start_speed_check_upload(file_name_uuid).await?;
-        let path = manager.get_speed_check_upload_uri(file_name_uuid, &session_id, 1).await?;
+        let path = manager.get_speed_check_upload_uri(file_name_uuid, &session_id).await?;
 
         Ok(
             VodDestination{

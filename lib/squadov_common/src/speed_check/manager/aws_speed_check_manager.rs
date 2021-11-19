@@ -12,6 +12,8 @@ use rusoto_s3::{
     CreateMultipartUploadRequest,
     UploadPartRequest,
     DeleteObjectRequest,
+    CompleteMultipartUploadRequest,
+    CompletedPart,
     util::{
         PreSignedRequest,
         PreSignedRequestOption,
@@ -77,11 +79,10 @@ impl SpeedCheckManager for S3SpeedCheckManager {
         Ok(())
     }
     
-    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str, part: i64) -> Result<String, SquadOvError> {
+    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<String, SquadOvError> {
         let req = UploadPartRequest{
             bucket: self.bucket.clone(),
             key: file_name_uuid.to_string(),
-            part_number: part,
             upload_id: session_id.to_string(),
             ..UploadPartRequest::default()
         };
@@ -92,5 +93,17 @@ impl SpeedCheckManager for S3SpeedCheckManager {
         Ok(req.get_presigned_url(&region, &creds, &PreSignedRequestOption{
             expires_in: std::time::Duration::from_secs(43200)
         }))
+    }
+
+    async fn finish_speed_check_upload(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<(), SquadOvError> {
+        let req = CompleteMultipartUploadRequest{
+            bucket: self.bucket.clone(),
+            key: file_name_uuid.to_string(),
+            upload_id: session_id.to_string(),
+            ..CompleteMultipartUploadRequest::default()
+        };
+
+        (*self.aws).as_ref().unwrap().s3.complete_multipart_upload(req).await?;
+        Ok(())
     }
 }
