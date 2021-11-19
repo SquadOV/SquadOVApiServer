@@ -70,7 +70,7 @@ pub async fn update_user_speed_check_handler(app : web::Data<Arc<api::ApiApplica
     Ok(HttpResponse::NoContent().finish())
 }
 
-pub async fn clean_up_speed_check_on_cloud_handler(data: web::Json<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+pub async fn clean_up_speed_check_on_cloud_handler(data : web::Path<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
     app.clean_up_speed_check_on_cloud(&data.file_name_uuid).await?;
     Ok(HttpResponse::NoContent().finish())
 }

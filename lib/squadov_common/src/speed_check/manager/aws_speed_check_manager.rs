@@ -73,7 +73,6 @@ impl SpeedCheckManager for S3SpeedCheckManager {
             key: file_name_uuid.to_string(),
             ..DeleteObjectRequest::default()
         };
-
         (*self.aws).as_ref().unwrap().s3.delete_object(req).await?;
         Ok(())
     }
