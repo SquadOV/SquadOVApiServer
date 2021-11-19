@@ -1,5 +1,8 @@
 pub mod auto;
+pub mod settings;
+
 pub use auto::*;
+pub use settings::*;
 
 use crate::api;
 use crate::api::auth::SquadOVSession;
