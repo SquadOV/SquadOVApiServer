@@ -992,6 +992,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 .route("/share", web::post().to(v1::change_squad_member_can_share_handler))
                                         )
                                         .route("/share", web::post().to(v1::update_squad_share_settings_handler))
+                                        .route("/content/{video_uuid}", web::delete().to(v1::remove_content_from_squad_handler))
                                 )
                                 .service(
                                     web::scope("/invite/{invite_uuid}")

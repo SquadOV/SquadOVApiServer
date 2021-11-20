@@ -4,6 +4,7 @@ use std::sync::Arc;
 use squadov_common::{SquadOvError, SquadRole};
 use crate::api::auth::SquadOVSession;
 use sqlx::{Transaction, Postgres};
+use uuid::Uuid;
 
 impl api::ApiApplication {
     async fn delete_squad(&self, tx: &mut Transaction<'_, Postgres>, squad_id: i64) -> Result<(), SquadOvError> {
@@ -27,6 +28,20 @@ impl api::ApiApplication {
             ",
             squad_id,
             user_id
+        )
+            .execute(tx)
+            .await?;
+        Ok(())
+    }
+
+    async fn remove_content_from_squad(&self, tx: &mut Transaction<'_, Postgres>, squad_id: i64, video_uuid: &Uuid) -> Result<(), SquadOvError> {
+        sqlx::query!(
+            "
+            DELETE FROM squadov.share_match_vod_connections
+            WHERE video_uuid = $1 AND dest_squad_id = $2
+            ",
+            video_uuid,
+            squad_id,
         )
             .execute(tx)
             .await?;
@@ -65,10 +80,17 @@ pub async fn leave_squad_handler(app : web::Data<Arc<api::ApiApplication>>, path
     };
 
     generic_remove_user_from_squad_handler(app, session.user.id, path.squad_id).await?;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 pub async fn kick_squad_member_handler(app : web::Data<Arc<api::ApiApplication>>, path : web::Path<super::SquadMembershipPathInput>) -> Result<HttpResponse, SquadOvError> {   
     generic_remove_user_from_squad_handler(app, path.user_id, path.squad_id).await?;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn remove_content_from_squad_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::SquadContentInput>) -> Result<HttpResponse, SquadOvError> {
+    let mut tx = app.pool.begin().await?;
+    app.remove_content_from_squad(&mut tx, path.squad_id, &path.video_uuid).await?;
+    tx.commit().await?;
+    Ok(HttpResponse::NoContent().finish())
 }

@@ -19,6 +19,12 @@ pub struct SquadSelectionInput {
 }
 
 #[derive(Deserialize)]
+pub struct SquadContentInput {
+    squad_id: i64,
+    video_uuid: Uuid,
+}
+
+#[derive(Deserialize)]
 pub struct SquadInviteInput {
     squad_id: i64,
     invite_uuid: Uuid
