@@ -213,6 +213,11 @@ pub async fn associate_vod_handler(path: web::Path<VodAssociatePathInput>, data 
         app.update_vod_metadata_session_id(&mut tx, &data.association.video_uuid, &metadata_id, &session_uri).await?;
     }
 
+    // Once the VOD is finished - we need to take care of who we actually want to share the match/VOD/clip with.
+    if !data.association.is_local {
+        app.handle_vod_share(&mut tx, &session.user, &data.association).await?;
+    }
+
     tx.commit().await?;
 
     // Note that we don't want to spawn a task directly here to "fastify" the VOD
