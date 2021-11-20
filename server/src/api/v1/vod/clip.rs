@@ -182,6 +182,8 @@ impl api::ApiApplication {
                 ON u.id = vc.clip_user_id
             INNER JOIN squadov.vods AS v
                 ON v.video_uuid = vc.clip_uuid
+            LEFT JOIN squadov.share_match_vod_connections AS svc
+                ON svc.video_uuid = v.video_uuid
             INNER JOIN squadov.matches AS m
                 ON m.uuid = v.match_uuid
             LEFT JOIN squadov.squad_role_assignments AS sra
@@ -209,7 +211,17 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
-            WHERE (vc.clip_user_id = $1 OR vau.video_uuid IS NOT NULL)
+            WHERE (
+                (
+                    vc.clip_user_id = $1 
+                    AND
+                    (
+                        CARDINALITY($6::BIGINT[]) = 0 OR svc.dest_squad_id = ANY($6)
+                    )
+                )
+                OR
+                vau.video_uuid IS NOT NULL
+            )
                 AND ($4::UUID IS NULL OR m.uuid = $4)
                 AND (CARDINALITY($5::INTEGER[]) = 0 OR m.game = ANY($5))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR sra.squad_id = ANY($6))
