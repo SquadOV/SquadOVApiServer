@@ -70,7 +70,8 @@ impl api::ApiApplication {
                 sq.is_discoverable AS "is_discoverable!",
                 sra.squad_role AS "squad_role: SquadRole",
                 us.username AS "username",
-                us.id AS "user_id"
+                us.id AS "user_id",
+                sub.squad_id IS NULL AS "can_share!"
             FROM squadov.squad_overview AS sq
             INNER JOIN squadov.squad_role_assignments AS sra
                 ON sra.squad_id = sq.id
@@ -78,6 +79,9 @@ impl api::ApiApplication {
                 ON us.id = sra.user_id
             INNER JOIN squadov.squads AS s
                 ON s.id = sq.id
+            LEFT JOIN squadov.squad_user_share_blacklist AS sub
+                ON sub.squad_id = s.id
+                    AND sub.user_id = us.id
             WHERE sra.user_id = $1
                 AND (NOT us.is_admin OR NOT s.is_default)
             ORDER BY sq.squad_name
@@ -100,6 +104,7 @@ impl api::ApiApplication {
                 role: x.squad_role,
                 username: x.username,
                 user_id: x.user_id,
+                can_share: x.can_share,
             }
         }).collect())
     }
@@ -117,12 +122,16 @@ impl api::ApiApplication {
                 sq.is_discoverable AS "is_discoverable!",
                 sra.squad_role AS "squad_role: SquadRole",
                 us.username AS "username",
-                us.id AS "user_id"
+                us.id AS "user_id",
+                sub.squad_id IS NULL AS "can_share!"
             FROM squadov.squad_overview AS sq
             INNER JOIN squadov.squad_role_assignments AS sra
                 ON sra.squad_id = sq.id
             INNER JOIN squadov.users AS us
                 ON us.id = sra.user_id
+            LEFT JOIN squadov.squad_user_share_blacklist AS sub
+                ON sub.squad_id = sq.id
+                    AND sub.user_id = us.id
             WHERE sra.squad_id = $1
             ORDER BY sq.squad_name
             "#,
@@ -144,6 +153,7 @@ impl api::ApiApplication {
                 role: x.squad_role,
                 username: x.username,
                 user_id: x.user_id,
+                can_share: x.can_share,
             }
         }).collect())
     }
@@ -161,12 +171,16 @@ impl api::ApiApplication {
                 sq.is_discoverable AS "is_discoverable!",
                 sra.squad_role AS "squad_role: SquadRole",
                 us.username AS "username",
-                us.id AS "user_id"
+                us.id AS "user_id",
+                sub.squad_id IS NULL AS "can_share!"
             FROM squadov.squad_overview AS sq
             INNER JOIN squadov.squad_role_assignments AS sra
                 ON sra.squad_id = sq.id
             INNER JOIN squadov.users AS us
                 ON us.id = sra.user_id
+            LEFT JOIN squadov.squad_user_share_blacklist AS sub
+                ON sub.squad_id = sq.id
+                    AND sub.user_id = us.id
             WHERE sra.user_id = $1 AND sra.squad_id = $2
             ORDER BY sq.squad_name
             "#,
@@ -194,6 +208,7 @@ impl api::ApiApplication {
             role: x.squad_role,
             username: x.username,
             user_id: x.user_id,
+            can_share: x.can_share,
         })
     }
 

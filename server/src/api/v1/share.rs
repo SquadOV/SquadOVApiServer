@@ -146,6 +146,27 @@ impl api::ApiApplication {
                             continue;
                         }
                     }
+
+                    // At this point we also need to check the blacklist. If the user is blacklisted they are not allowed to
+                    // share VODs with the squad even if they leave and rejoin.
+                    let is_on_blacklist = sqlx::query!(
+                        r#"
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM squadov.squad_user_share_blacklist
+                            WHERE squad_id = $1 AND user_id = $2
+                        ) AS "exists!"
+                        "#,
+                        squad_id,
+                        user.id,
+                    )
+                        .fetch_one(&mut *tx)
+                        .await?
+                        .exists;
+
+                    if is_on_blacklist {
+                        continue;
+                    }
                 }
 
                 // 3) Share with the user/squad in question.

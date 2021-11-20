@@ -20,12 +20,13 @@ pub struct SquadOvSquad {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct SquadOvSquadMembership {
     pub squad: SquadOvSquad,
     pub role: SquadRole,
     pub username: String,
-    #[serde(rename="userId")]
-    pub user_id: i64
+    pub user_id: i64,
+    pub can_share: bool,
 }
 
 #[derive(Serialize, sqlx::Type, PartialEq, Debug)]
