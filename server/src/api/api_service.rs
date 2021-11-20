@@ -986,7 +986,13 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("", web::delete().to(v1::delete_squad_handler))
                                         .route("", web::put().to(v1::edit_squad_handler))
                                         .route("/invite/{invite_uuid}/revoke", web::post().to(v1::revoke_squad_invite_handler))
-                                        .route("/membership/{user_id}", web::delete().to(v1::kick_squad_member_handler))
+                                        .service(
+                                            web::scope("/membership/{user_id}")
+                                                .route("", web::delete().to(v1::kick_squad_member_handler))
+                                                .route("/share", web::post().to(v1::change_squad_member_can_share_handler))
+                                        )
+                                        .route("/share", web::post().to(v1::update_squad_share_settings_handler))
+                                        .route("/content/{video_uuid}", web::delete().to(v1::remove_content_from_squad_handler))
                                 )
                                 .service(
                                     web::scope("/invite/{invite_uuid}")
@@ -1026,6 +1032,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 .route("/{user_id}", web::get().to(v1::get_squad_user_membership_handler))
                                                 .route("", web::get().to(v1::get_all_squad_user_memberships_handler))
                                         )
+                                        .route("/share", web::get().to(v1::get_squad_share_settings_handler))
                                 )
                         )
                 )
