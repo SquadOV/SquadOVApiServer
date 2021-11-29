@@ -58,6 +58,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                     web::scope("/oauth")
                         .route("/riot", web::post().to(v1::handle_riot_oauth_callback_handler))
                         .route("/twitch", web::post().to(v1::handle_twitch_oauth_callback_handler))
+                        .route("/discord", web::post().to(v1::handle_discord_oauth_callback_handler))
                 )
                 .service(
                     // These are the only two endpoints where the user needs to provide a valid session to use.
@@ -258,10 +259,18 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                             web::scope("/twitch")
                                                 .route("", web::get().to(v1::get_my_linked_twitch_account_handler))
                                         )
+                                        .service(
+                                            web::scope("/discord")
+                                                .service(
+                                                    web::resource("/{discord_snowflake}")
+                                                        .route(web::delete().to(v1::delete_linked_discord_account_handler))
+                                                )
+                                        )
                                 )
                                 .service(
                                     web::scope("/oauth")
                                         .route("/twitch", web::get().to(v1::get_twitch_login_url_handler))
+                                        .route("/discord", web::get().to(v1::get_discord_login_url_handler))
                                 )
                                 .service(
                                     web::scope("/discover")

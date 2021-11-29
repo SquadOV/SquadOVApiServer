@@ -47,6 +47,7 @@ pub mod segment;
 pub mod profile;
 pub mod image;
 pub mod config;
+pub mod discord;
 
 pub use error::*;
 pub use parse::*;

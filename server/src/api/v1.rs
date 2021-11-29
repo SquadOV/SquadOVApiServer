@@ -19,6 +19,7 @@ mod community;
 mod profile;
 mod sentry;
 mod twitch;
+mod discord;
 
 pub use user::*;
 pub use matches::*;
@@ -41,6 +42,7 @@ pub use community::*;
 pub use profile::*;
 pub use sentry::*;
 pub use twitch::*;
+pub use discord::*;
 
 use serde::Serialize;
 

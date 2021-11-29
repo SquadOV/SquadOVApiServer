@@ -69,6 +69,9 @@ use squadov_common::{
         oauth,
     },
     config::CommonConfig,
+    discord::{
+        DiscordConfig,
+    },
 };
 use url::Url;
 use std::vec::Vec;
@@ -222,6 +225,7 @@ pub struct ApiConfig {
     pub ipstack: IpstackConfig,
     pub segment: SegmentConfig,
     pub sentry: SentryConfig,
+    pub discord: DiscordConfig,
 }
 
 impl CommonConfig for DatabaseConfig {
