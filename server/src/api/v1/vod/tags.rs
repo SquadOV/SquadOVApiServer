@@ -15,6 +15,26 @@ use sqlx::{Transaction, Postgres};
 use serde::Deserialize;
 
 impl api::ApiApplication {
+    pub async fn get_vod_tags(&self, video_uuid: &Uuid, user_id: i64) -> Result<Vec<VodTag>, SquadOvError> {
+        let tags = sqlx::query_as!(
+            RawVodTag,
+            r#"
+            SELECT
+                vvt.video_uuid AS "video_uuid!",
+                vvt.user_id AS "user_id!",
+                vvt.tm AS "tm!",
+                vvt.tag AS "tag!",
+                vvt.tag_id AS "tag_id!"
+            FROM squadov.view_vod_tags AS vvt
+            WHERE video_uuid = $1
+            "#,
+            video_uuid,
+        )
+            .fetch_all(&*self.pool)
+            .await?;
+        Ok(vod::condense_raw_vod_tags(tags, user_id)?)
+    }
+
     pub async fn create_tags(&self, tx: &mut Transaction<'_, Postgres>, tags: &[String]) -> Result<(), SquadOvError> {
         sqlx::query!(
             "
@@ -92,8 +112,12 @@ impl api::ApiApplication {
     }
 }
 
-pub async fn get_tags_for_vod_handler(data : web::Path<super::GenericVodPathInput>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
-    Ok(HttpResponse::NoContent().finish())
+pub async fn get_tags_for_vod_handler(data : web::Path<super::GenericVodPathInput>, app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+    Ok(HttpResponse::Ok().json(
+        app.get_vod_tags(&data.video_uuid, session.user.id).await?
+    ))
 }
 
 pub async fn add_tags_for_vod_handler(data : web::Path<super::GenericVodPathInput>, app : web::Data<Arc<api::ApiApplication>>, tags: web::Json<Vec<String>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {

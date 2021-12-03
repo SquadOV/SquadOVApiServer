@@ -49,7 +49,11 @@ use squadov_common::{
     share::{
         LinkShareData,
     },
-    vod::VodTag,
+    vod::{
+        self,
+        VodTag,
+        RawVodTag,
+    },
 };
 use std::sync::Arc;
 use chrono::{DateTime, Utc, TimeZone, Duration};
@@ -88,6 +92,7 @@ pub struct RawRecentMatchData {
     favorite_reason: Option<String>,
     is_watchlist: bool,
     game: SquadOvGames,
+    tags: Vec<VodTag>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -218,7 +223,8 @@ impl api::ApiApplication {
                     ou.id AS "user_id!",
                     ufm.reason AS "favorite_reason?",
                     uwv.video_uuid IS NOT NULL AS "is_watchlist!",
-                    m.game AS "game!"
+                    m.game AS "game!",
+                    COALESCE(JSONB_AGG(vvt.*) FILTER(WHERE vvt.video_uuid IS NOT NULL), '[]'::JSONB)  AS "tags!"
                 FROM UNNEST($1::UUID[], $2::UUID[]) AS inp(match_uuid, user_uuid)
                 INNER JOIN squadov.users AS ou
                     ON ou.uuid = inp.user_uuid
@@ -233,7 +239,10 @@ impl api::ApiApplication {
                 LEFT JOIN squadov.user_watchlist_vods AS uwv
                     ON uwv.video_uuid = v.video_uuid
                         AND uwv.user_id = $3
+                LEFT JOIN squadov.view_vod_tags AS vvt
+                    ON vvt.video_uuid = v.video_uuid
                 WHERE v.is_clip = FALSE
+                GROUP BY v.video_uuid, v.match_uuid, v.user_uuid, v.end_time, v.is_local, ou.username, ou.id, ufm.reason, uwv.video_uuid, m.game
                 ORDER BY v.end_time DESC
                 "#,
                 &match_uuids,
@@ -254,7 +263,8 @@ impl api::ApiApplication {
                         user_id: x.user_id,
                         favorite_reason: x.favorite_reason,
                         is_watchlist: x.is_watchlist,
-                        game: SquadOvGames::try_from(x.game)?
+                        game: SquadOvGames::try_from(x.game)?,
+                        tags: vod::condense_raw_vod_tags(serde_json::from_value::<Vec<RawVodTag>>(x.tags)?, user_id)?,
                     })
                 })
                 .collect::<Result<Vec<RawRecentMatchData>, SquadOvError>>()?
@@ -631,6 +641,7 @@ impl api::ApiApplication {
                         is_watchlist: x.is_watchlist,
                         is_local: x.is_local,
                         access_token: None,
+                        tags: x.tags.clone(),
                     },
                     aimlab_task: aimlab_task.cloned(),
                     lol_match,
