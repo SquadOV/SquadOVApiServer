@@ -132,6 +132,7 @@ impl Default for RecentMatchGameQuery {
 pub struct RecentMatchQuery {
     pub games: Option<Vec<SquadOvGames>>,
     pub wow_releases: Option<Vec<SquadOvWowRelease>>,
+    pub tags: Option<Vec<String>>,
     pub squads: Option<Vec<i64>>,
     pub users: Option<Vec<i64>>,
     pub time_start: Option<i64>,
@@ -163,6 +164,7 @@ impl Default for RecentMatchQuery {
         Self {
             games: None,
             wow_releases: None,
+            tags: None,
             squads: None,
             users: None,
             time_start: None,
@@ -335,6 +337,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.view_vod_tags AS vvt
+                ON v.video_uuid = vvt.video_uuid
             WHERE u.id = $1
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
@@ -384,6 +388,8 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+            GROUP BY v.match_uuid, v.user_uuid, v.end_time
+            HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -433,6 +439,8 @@ impl api::ApiApplication {
             &filter.filters.wow.encounters.enabled,
             &filter.filters.wow.keystones.enabled,
             &filter.filters.wow.arenas.enabled,
+            // TAGS - pog
+            &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.heavy_pool)
             .await?

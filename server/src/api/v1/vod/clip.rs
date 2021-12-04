@@ -220,6 +220,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.view_vod_tags AS vvt
+                ON v.video_uuid = vvt.video_uuid
             WHERE (
                 (
                     vc.clip_user_id = $1 
@@ -283,6 +285,8 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+            GROUP BY vc.clip_uuid, vc.tm
+            HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY vc.tm DESC
             LIMIT $2 OFFSET $3
             ",
@@ -332,6 +336,8 @@ impl api::ApiApplication {
             &filter.filters.wow.encounters.enabled,
             &filter.filters.wow.keystones.enabled,
             &filter.filters.wow.arenas.enabled,
+            // Tags
+            &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.pool)
             .await?
