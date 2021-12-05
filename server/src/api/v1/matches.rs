@@ -270,6 +270,8 @@ impl api::ApiApplication {
                 FROM squadov.vods AS v
                 INNER JOIN squadov.users AS uu
                     ON v.user_uuid = uu.uuid
+                LEFT JOIN squadov.share_match_vod_connections AS svc
+                    ON svc.video_uuid = v.video_uuid
                 WHERE uu.id = $1
                     AND v.match_uuid IS NOT NULL
                     AND v.user_uuid IS NOT NULL
@@ -279,6 +281,7 @@ impl api::ApiApplication {
                     AND COALESCE(v.end_time <= $8, TRUE)
                     AND v.is_clip = FALSE
                     AND (CARDINALITY($11::UUID[]) = 0 OR v.video_uuid = ANY($11))
+                    AND (CARDINALITY($5::BIGINT[]) = 0 OR svc.dest_squad_id = ANY($5))
                 UNION
                 SELECT v.*
                 FROM squadov.view_share_connections_access_users AS vi

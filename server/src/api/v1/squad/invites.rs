@@ -184,13 +184,15 @@ impl api::ApiApplication {
             squad_id,
             user_id,
         )
-            .execute(tx)
+            .execute(&mut *tx)
             .await?;
+
+        self.autoshare_to_squad_for_user_on_join(&mut *tx, user_id, squad_id).await?;
         Ok(())
     }
 
     pub async fn add_user_to_squad_from_invite(&self, tx: &mut Transaction<'_, Postgres>, squad_id: i64, invite_uuid: &Uuid) -> Result<(), SquadOvError> {
-        sqlx::query!(
+        let invite_user_id = sqlx::query!(
             "
             INSERT INTO squadov.squad_role_assignments (
                 squad_id,
@@ -202,12 +204,18 @@ impl api::ApiApplication {
             INNER JOIN squadov.users AS u
                 ON smi.email = u.email
             WHERE squad_id = $1 AND invite_uuid = $2
+            RETURNING user_id
             ",
             squad_id,
             invite_uuid
         )
-            .execute(tx)
-            .await?;
+            .fetch_optional(&mut *tx)
+            .await?
+            .map(|x| { x.user_id });
+
+        if let Some(user_id) = invite_user_id {
+            self.autoshare_to_squad_for_user_on_join(&mut *tx, user_id, squad_id).await?;
+        }
         Ok(())
     }
 
@@ -599,4 +607,22 @@ pub async fn use_link_to_join_squad_handler(app : web::Data<Arc<api::ApiApplicat
     tx.commit().await?;
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn join_public_squad_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::SquadSelectionInput>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+
+    let squad = app.get_squad(path.squad_id).await?;
+    Ok(
+        if squad.is_public && squad.is_discoverable {
+            let mut tx = app.pool.begin().await?;
+            app.force_add_user_to_squad(&mut tx, path.squad_id, session.user.id).await?;
+            tx.commit().await?;
+            HttpResponse::NoContent().finish()
+        } else {
+            return Err(SquadOvError::Unauthorized);
+        }
+    )
+
 }

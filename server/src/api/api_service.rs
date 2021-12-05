@@ -199,6 +199,11 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .route(web::post().to(v1::create_match_clip_profile_share_handler))
                                 .route(web::delete().to(v1::delete_match_clip_profile_share_handler))
                         )
+                        .service(
+                            web::resource("/settings")
+                                .route(web::get().to(v1::get_user_auto_share_settings_handler))
+                                .route(web::post().to(v1::edit_user_auto_share_settings_handler))
+                        )
                 )
                 .service(
                     web::scope("/match/{match_uuid}")
@@ -266,6 +271,10 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .service(
                                     web::scope("/oauth")
                                         .route("/twitch", web::get().to(v1::get_twitch_login_url_handler))
+                                )
+                                .service(
+                                    web::scope("/discover")
+                                        .route("/squads", web::get().to(v1::get_user_discover_squads_handler))
                                 )
                         )
                         .service(
@@ -986,7 +995,13 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("", web::delete().to(v1::delete_squad_handler))
                                         .route("", web::put().to(v1::edit_squad_handler))
                                         .route("/invite/{invite_uuid}/revoke", web::post().to(v1::revoke_squad_invite_handler))
-                                        .route("/membership/{user_id}", web::delete().to(v1::kick_squad_member_handler))
+                                        .service(
+                                            web::scope("/membership/{user_id}")
+                                                .route("", web::delete().to(v1::kick_squad_member_handler))
+                                                .route("/share", web::post().to(v1::change_squad_member_can_share_handler))
+                                        )
+                                        .route("/share", web::post().to(v1::update_squad_share_settings_handler))
+                                        .route("/content/{video_uuid}", web::delete().to(v1::remove_content_from_squad_handler))
                                 )
                                 .service(
                                     web::scope("/invite/{invite_uuid}")
@@ -1003,6 +1018,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 // Metadata about the squad should be public (without access checks besides being logged in
                                 // so that people can know what squads they're being invited to.
                                 .route("/profile", web::get().to(v1::get_squad_handler))
+                                .route("/join", web::post().to(v1::join_public_squad_handler))
                                 // Member-only endpoints
                                 .service(
                                     web::scope("")
@@ -1025,6 +1041,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 .route("/{user_id}", web::get().to(v1::get_squad_user_membership_handler))
                                                 .route("", web::get().to(v1::get_all_squad_user_memberships_handler))
                                         )
+                                        .route("/share", web::get().to(v1::get_squad_share_settings_handler))
                                 )
                         )
                 )

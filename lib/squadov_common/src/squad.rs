@@ -1,32 +1,32 @@
 pub mod status;
 pub mod links;
 
-use crate::SquadOvError;
+use crate::{SquadOvError, SquadOvGames};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use unicode_segmentation::UnicodeSegmentation;
 use sqlx::{Executor, Postgres};
 
 #[derive(Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct SquadOvSquad {
     pub id: i64,
-    #[serde(rename="squadName")]
     pub squad_name: String,
-    #[serde(rename="creationTime")]
     pub creation_time: DateTime<Utc>,
-    #[serde(rename="memberCount")]
     pub member_count: i64,
-    #[serde(rename="pendingInviteCount")]
-    pub pending_invite_count: i64
+    pub pending_invite_count: i64,
+    pub is_public: bool,
+    pub is_discoverable: bool,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct SquadOvSquadMembership {
     pub squad: SquadOvSquad,
     pub role: SquadRole,
     pub username: String,
-    #[serde(rename="userId")]
-    pub user_id: i64
+    pub user_id: i64,
+    pub can_share: bool,
 }
 
 #[derive(Serialize, sqlx::Type, PartialEq, Debug)]
@@ -53,6 +53,23 @@ pub struct SquadInvite {
     pub invite_uuid: uuid::Uuid,
     #[serde(rename="inviterUsername")]
     pub inviter_username: String
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all="camelCase")]
+pub struct SquadWowSharingSettings {
+    pub disable_encounters: bool,
+    pub disable_dungeons: bool,
+    pub disable_keystones: bool,
+    pub disable_arenas: bool,
+    pub disable_bgs: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+pub struct SquadSharingSettings {
+    pub disabled_games: Vec<SquadOvGames>,
+    pub wow: SquadWowSharingSettings,
 }
 
 const EMAIL_HIDE_TOKEN: &'static str = "*******";

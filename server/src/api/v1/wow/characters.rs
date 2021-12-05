@@ -118,7 +118,7 @@ impl api::ApiApplication {
             Ok(
                 sqlx::query!(
                     r#"
-                    SELECT DISTINCT
+                    SELECT DISTINCT ON (wcp.unit_guid)
                         wcp.unit_guid AS "guid",
                         COALESCE(wcp.unit_name, '') AS "name!",
                         COALESCE(ARRAY_AGG(wci.ilvl ORDER BY wci.idx ASC), ARRAY[]::INTEGER[]) AS "items!",
@@ -137,6 +137,7 @@ impl api::ApiApplication {
                     WHERE wmv.match_uuid = $1
                         AND wmv.user_id = $2
                     GROUP BY wcp.unit_guid, wcp.unit_name, wvc.spec_id, wvc.team, wvc.event_id, wvc.rating, wvc.class_id
+                    ORDER BY wcp.unit_guid, wvc.class_id
                     "#,
                     match_uuid,
                     user_id

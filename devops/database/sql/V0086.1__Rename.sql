@@ -1,0 +1,2 @@
+ALTER TABLE user_autoshare_settings
+RENAME TO user_autoshare_common_settings;
