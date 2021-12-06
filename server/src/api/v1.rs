@@ -19,11 +19,8 @@ mod community;
 mod profile;
 mod sentry;
 mod twitch;
-<<<<<<< HEAD
 mod speed_check;
-=======
 mod discord;
->>>>>>> origin/master
 
 pub use user::*;
 pub use matches::*;
