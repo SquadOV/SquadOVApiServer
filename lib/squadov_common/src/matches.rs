@@ -9,7 +9,10 @@ use crate::{
         ValorantPlayerMatchSummary,
     },
     aimlab::AimlabTask,
-    vod::VodManifest,
+    vod::{
+        VodManifest,
+        VodTag,
+    },
     wow::{
         WoWEncounter,
         WoWChallenge,
@@ -59,6 +62,7 @@ pub struct BaseRecentMatch {
     pub is_watchlist: bool,
     pub is_local: bool,
     pub access_token: Option<String>,
+    pub tags: Vec<VodTag>,
 }
 
 #[derive(Serialize, Debug)]

@@ -16,7 +16,11 @@ use squadov_common::{
     riot::{
         RiotAccount,
         db as riotdb,
-    }
+    },
+    discord::{
+        DiscordUser,
+        db as discorddb,
+    },
 };
 use uuid::Uuid;
 use std::collections::HashMap;
@@ -110,6 +114,7 @@ impl api::ApiApplication {
 struct AllAccountsResponse {
     riot: Vec<RiotAccount>,
     twitch: Vec<TwitchAccount>,
+    discord: Vec<DiscordUser>,
 }
 
 pub async fn get_all_my_linked_accounts_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
@@ -118,5 +123,6 @@ pub async fn get_all_my_linked_accounts_handler(app : web::Data<Arc<api::ApiAppl
     Ok(HttpResponse::Ok().json(AllAccountsResponse{
         riot: riotdb::list_riot_accounts_for_user(&*app.pool, session.user.id).await?,
         twitch: twitch_acc::find_twitch_accounts_for_user(&*app.pool, session.user.id).await?,
+        discord: discorddb::find_discord_accounts_for_user(&*app.pool, session.user.id).await?,
     }))
 }

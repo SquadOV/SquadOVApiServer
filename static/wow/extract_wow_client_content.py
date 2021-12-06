@@ -3,6 +3,25 @@ import os
 import csv
 import json
 
+def extract_instances(dataFolder, outputFolder):
+    allData = []
+
+    with open(os.path.join(dataFolder, 'map.csv')) as classes:
+        reader = csv.DictReader(classes)
+        for row in reader:
+            if row['InstanceType'] != '1' and row['InstanceType'] != '2' and row['InstanceType'] != '3':
+                continue
+
+            allData.append({
+                'id': int(row['ID']),
+                'name': row['MapName_lang'],
+                'expansion': '',
+                'parent': None,
+            })
+
+    with open(os.path.join(outputFolder, 'instances.json'), 'w') as f:
+        json.dump(allData, f)
+
 def extract_arenas(dataFolder, outputFolder):
     allData = []
 
@@ -117,6 +136,9 @@ def main():
 
     # Raids (output relevant expansions [instances + encounters])
     extract_raids(args.data, args.output, expansions)
+
+    # Pure instance data
+    extract_instances(args.data, args.output)
 
 if __name__ == '__main__':
     main()
