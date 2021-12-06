@@ -21,6 +21,11 @@ resource "aws_s3_bucket" "vod_storage_bucket" {
             days = 30
             storage_class = "STANDARD_IA"
         }
+
+        transition {
+            days = 90
+            storage_class = "GLACIER_IR"
+        }
     }
 
     server_side_encryption_configuration {

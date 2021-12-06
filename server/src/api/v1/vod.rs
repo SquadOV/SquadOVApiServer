@@ -3,12 +3,14 @@ mod delete;
 mod find;
 mod get;
 mod clip;
+mod tags;
 
 pub use create::*;
 pub use delete::*;
 pub use find::*;
 pub use get::*;
 pub use clip::*;
+pub use tags::*;
 
 use crate::api;
 use crate::api::auth::SquadOVSession;

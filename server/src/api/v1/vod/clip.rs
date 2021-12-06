@@ -17,6 +17,10 @@ use squadov_common::{
     access::{
         self,
         AccessToken,
+    },
+    vod::{
+        self,
+        RawVodTag,
     }
 };
 use std::sync::Arc;
@@ -123,7 +127,8 @@ impl api::ApiApplication {
                 COALESCE(cc.count, 0) AS "comments!",
                 COALESCE(cv.count, 0) AS "views!",
                 ufv.reason AS "favorite_reason?",
-                uwv.video_uuid IS NOT NULL AS "is_watchlist!"
+                uwv.video_uuid IS NOT NULL AS "is_watchlist!",
+                COALESCE(JSONB_AGG(vvt.*) FILTER(WHERE vvt.video_uuid IS NOT NULL), '[]'::JSONB)  AS "tags!"
             FROM squadov.vod_clips AS vc
             INNER JOIN squadov.users AS u
                 ON u.id = vc.clip_user_id
@@ -139,7 +144,10 @@ impl api::ApiApplication {
             LEFT JOIN squadov.user_watchlist_vods AS uwv
                 ON uwv.video_uuid = vc.clip_uuid
                     AND uwv.user_id = $2
+            LEFT JOIN squadov.view_vod_tags AS vvt
+                ON vvt.video_uuid = vc.clip_uuid
             WHERE vc.clip_uuid = ANY($1)
+            GROUP BY vc.clip_uuid, vc.parent_vod_uuid, vc.clip_user_id, vc.title, vc.description, vc.game, vc.tm, u.username, rc.count, cc.count, cv.count, ufv.reason, uwv.video_uuid
             ORDER BY vc.tm DESC
             "#,
             uuids,
@@ -169,6 +177,7 @@ impl api::ApiApplication {
                 favorite_reason: x.favorite_reason,
                 is_watchlist: x.is_watchlist,
                 access_token: None,
+                tags: vod::condense_raw_vod_tags(serde_json::from_value::<Vec<RawVodTag>>(x.tags)?, user_id)?,
             })
         }).collect::<Result<Vec<VodClip>, SquadOvError>>()?)
     }
@@ -211,6 +220,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.view_vod_tags AS vvt
+                ON v.video_uuid = vvt.video_uuid
             WHERE (
                 (
                     vc.clip_user_id = $1 
@@ -274,6 +285,8 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+            GROUP BY vc.clip_uuid, vc.tm
+            HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY vc.tm DESC
             LIMIT $2 OFFSET $3
             ",
@@ -323,6 +336,8 @@ impl api::ApiApplication {
             &filter.filters.wow.encounters.enabled,
             &filter.filters.wow.keystones.enabled,
             &filter.filters.wow.arenas.enabled,
+            // Tags
+            &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.pool)
             .await?

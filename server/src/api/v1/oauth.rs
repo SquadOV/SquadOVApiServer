@@ -19,6 +19,12 @@ use squadov_common::{
             TWITCH_CHANNEL_UNSUB,
         },
     },
+    discord::{
+        api::{
+            DiscordApiClient,
+        },
+        self,
+    }
 };
 use uuid::Uuid;
 use serde::Deserialize;
@@ -157,5 +163,54 @@ pub async fn handle_twitch_oauth_callback_handler(app : web::Data<Arc<api::ApiAp
     twitch::link_twitch_account_to_user(&*app.pool, session.user.id, &account.twitch_user_id).await?;
     
     app.session.delete_session(&session_id, &*app.pool).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn get_discord_login_url_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+    
+    let session = SquadOVSession{
+        session_id: Uuid::new_v4().to_string(),
+        user: session.user.clone(),
+        access_token: String::new(),
+        refresh_token: String::new(),
+        is_temp: true,
+        share_token: None,
+        sqv_access_token: None,
+    };
+    app.session.store_session(&*app.pool, &session).await?;
+
+    let state = squadov_common::generate_csrf_user_oauth_state(&*app.pool, &session.user.uuid, &session.session_id).await?;
+    let url = format!(
+        "{base}&state={state}",
+        base=app.config.discord.base_url,
+        state=&state,
+    );
+    Ok(HttpResponse::Ok().json(&url))
+}
+
+pub async fn handle_discord_oauth_callback_handler(app : web::Data<Arc<api::ApiApplication>>, data: web::Json<OAuthCallbackData>) -> Result<HttpResponse, SquadOvError> {
+    let session_id = squadov_common::check_csrf_user_oauth_state(&*app.pool, &data.state).await?;
+    let session = app.session.get_session_from_id(&session_id, &*app.pool).await?.ok_or(SquadOvError::Unauthorized)?;
+
+    let mut redirect_url = Url::parse(&data.redirect_url)?;
+    redirect_url.set_query(None);
+
+    let token = squadov_common::discord::oauth::exchange_authorization_code_for_access_token(
+        &app.config.discord.client_id,
+        &app.config.discord.client_secret,
+        &redirect_url.as_str(),
+        &data.code
+    ).await?;
+
+    let api = DiscordApiClient::new(app.config.discord.clone(), token.clone(), app.pool.clone(), session.user.id);
+    let discord_user = api.get_current_user().await?;
+
+    let mut tx = app.pool.begin().await?;
+    discord::db::store_discord_user(&mut tx, &discord_user).await?;
+    discord::db::link_discord_user_to_squadv(&mut tx, session.user.id, discord_user.id.parse::<i64>()?, &token).await?;
+    tx.commit().await?;
+
     Ok(HttpResponse::NoContent().finish())
 }

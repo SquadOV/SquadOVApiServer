@@ -7,4 +7,5 @@ flyway \
     -url="jdbc:postgresql://$DATABASE_HOST/squadov"  \
     -locations="filesystem:$PWD/sql,filesystem:$PWD/prod" \
     -schemas="squadov" \
+    -outOfOrder="true" \
     $OP
