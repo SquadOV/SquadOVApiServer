@@ -95,6 +95,7 @@ pub struct GenericWowQuery {
     pub encounters: WowListQuery,
     pub keystones: WowListQuery,
     pub arenas: WowListQuery,
+    pub instances: WowListQuery,
 }
 
 impl Default for GenericWowQuery {
@@ -103,6 +104,7 @@ impl Default for GenericWowQuery {
             encounters: WowListQuery::default(),
             keystones: WowListQuery::default(),
             arenas: WowListQuery::default(),
+            instances: WowListQuery::default(),
         }
     }
 }
