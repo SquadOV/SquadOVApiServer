@@ -285,6 +285,11 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+                AND (wiv.view_id IS NULL OR (
+                    $38
+                        AND (CARDINALITY($39::INTEGER[]) = 0 OR wiv.instance_type = ANY($39))
+                        AND (CARDINALITY($40::INTEGER[]) = 0 OR wiv.instance_id = ANY($40))
+                ))
             GROUP BY vc.clip_uuid, vc.tm
             HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY vc.tm DESC
@@ -338,6 +343,10 @@ impl api::ApiApplication {
             &filter.filters.wow.arenas.enabled,
             // Tags
             &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
+            // Wow instance filters
+            &filter.filters.wow.instances.enabled,
+            &filter.filters.wow.instances.instance_types.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
+            &filter.filters.wow.instances.all_instance_ids(),
         )
             .fetch_all(&*self.pool)
             .await?
