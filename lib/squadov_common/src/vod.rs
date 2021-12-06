@@ -24,6 +24,7 @@ use std::sync::{Arc};
 use std::io::BufReader;
 use tempfile::NamedTempFile;
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 const VOD_MAX_AGE_SECONDS: i64 = 21600; // 6 hours
 
@@ -127,6 +128,49 @@ impl VodSegmentId {
     }
 }
 
+#[derive(Deserialize, Debug)]
+pub struct RawVodTag {
+    pub video_uuid: Uuid,
+    pub tag_id: i64,
+    pub tag: String,
+    pub user_id: i64,
+    pub tm: DateTime<Utc>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct VodTag {
+    pub video_uuid: Uuid,
+    // The text of the tag
+    pub tag: String,
+    pub tag_id: i64,
+    // How many people applied this same exact tag
+    pub count: i64,
+    // Whether or not the person doing the query applied this tag
+    pub is_self: bool,
+}
+
+pub fn condense_raw_vod_tags(tags: Vec<RawVodTag>, self_user_id: i64) -> Result<Vec<VodTag>, SquadOvError> {
+    let mut store: HashMap<String, VodTag> = HashMap::new();
+    for t in tags {
+        if !store.contains_key(&t.tag) {
+            store.insert(t.tag.clone(), VodTag{
+                video_uuid: t.video_uuid.clone(),
+                tag: t.tag.clone(),
+                tag_id: t.tag_id,
+                count: 0,
+                is_self: false,
+            });
+        }
+
+        if let Some(mt) = store.get_mut(&t.tag) {
+            mt.count += 1;
+            mt.is_self |= t.user_id == self_user_id;
+        }
+    }
+    Ok(store.values().cloned().collect())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all="camelCase")]
 pub struct VodClip {
@@ -143,6 +187,7 @@ pub struct VodClip {
     pub favorite_reason: Option<String>,
     pub is_watchlist: bool,
     pub access_token: Option<String>,
+    pub tags: Vec<VodTag>,
 }
 
 #[derive(Serialize,Deserialize,Clone)]

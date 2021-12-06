@@ -49,6 +49,11 @@ use squadov_common::{
     share::{
         LinkShareData,
     },
+    vod::{
+        self,
+        VodTag,
+        RawVodTag,
+    },
 };
 use std::sync::Arc;
 use chrono::{DateTime, Utc, TimeZone, Duration};
@@ -87,6 +92,7 @@ pub struct RawRecentMatchData {
     favorite_reason: Option<String>,
     is_watchlist: bool,
     game: SquadOvGames,
+    tags: Vec<VodTag>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -126,6 +132,7 @@ impl Default for RecentMatchGameQuery {
 pub struct RecentMatchQuery {
     pub games: Option<Vec<SquadOvGames>>,
     pub wow_releases: Option<Vec<SquadOvWowRelease>>,
+    pub tags: Option<Vec<String>>,
     pub squads: Option<Vec<i64>>,
     pub users: Option<Vec<i64>>,
     pub time_start: Option<i64>,
@@ -157,6 +164,7 @@ impl Default for RecentMatchQuery {
         Self {
             games: None,
             wow_releases: None,
+            tags: None,
             squads: None,
             users: None,
             time_start: None,
@@ -217,7 +225,8 @@ impl api::ApiApplication {
                     ou.id AS "user_id!",
                     ufm.reason AS "favorite_reason?",
                     uwv.video_uuid IS NOT NULL AS "is_watchlist!",
-                    m.game AS "game!"
+                    m.game AS "game!",
+                    COALESCE(JSONB_AGG(vvt.*) FILTER(WHERE vvt.video_uuid IS NOT NULL), '[]'::JSONB)  AS "tags!"
                 FROM UNNEST($1::UUID[], $2::UUID[]) AS inp(match_uuid, user_uuid)
                 INNER JOIN squadov.users AS ou
                     ON ou.uuid = inp.user_uuid
@@ -232,7 +241,10 @@ impl api::ApiApplication {
                 LEFT JOIN squadov.user_watchlist_vods AS uwv
                     ON uwv.video_uuid = v.video_uuid
                         AND uwv.user_id = $3
+                LEFT JOIN squadov.view_vod_tags AS vvt
+                    ON vvt.video_uuid = v.video_uuid
                 WHERE v.is_clip = FALSE
+                GROUP BY v.video_uuid, v.match_uuid, v.user_uuid, v.end_time, v.is_local, ou.username, ou.id, ufm.reason, uwv.video_uuid, m.game
                 ORDER BY v.end_time DESC
                 "#,
                 &match_uuids,
@@ -253,7 +265,8 @@ impl api::ApiApplication {
                         user_id: x.user_id,
                         favorite_reason: x.favorite_reason,
                         is_watchlist: x.is_watchlist,
-                        game: SquadOvGames::try_from(x.game)?
+                        game: SquadOvGames::try_from(x.game)?,
+                        tags: vod::condense_raw_vod_tags(serde_json::from_value::<Vec<RawVodTag>>(x.tags)?, user_id)?,
                     })
                 })
                 .collect::<Result<Vec<RawRecentMatchData>, SquadOvError>>()?
@@ -324,6 +337,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.view_vod_tags AS vvt
+                ON v.video_uuid = vvt.video_uuid
             WHERE u.id = $1
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
@@ -373,6 +388,8 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+            GROUP BY v.match_uuid, v.user_uuid, v.end_time
+            HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -422,6 +439,8 @@ impl api::ApiApplication {
             &filter.filters.wow.encounters.enabled,
             &filter.filters.wow.keystones.enabled,
             &filter.filters.wow.arenas.enabled,
+            // TAGS - pog
+            &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.heavy_pool)
             .await?
@@ -630,6 +649,7 @@ impl api::ApiApplication {
                         is_watchlist: x.is_watchlist,
                         is_local: x.is_local,
                         access_token: None,
+                        tags: x.tags.clone(),
                     },
                     aimlab_task: aimlab_task.cloned(),
                     lol_match,
