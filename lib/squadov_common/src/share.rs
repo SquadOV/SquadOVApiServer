@@ -1,12 +1,17 @@
 pub mod auto;
+pub mod rabbitmq;
 
 use crate::{
     SquadOvError,
+    SquadSharingSettings,
+    SquadWowSharingSettings,
+    SquadOvGames,
 };
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
-use sqlx::{Executor, Postgres};
+use sqlx::{Executor, Postgres, postgres::PgPool};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all="camelCase")]
@@ -16,7 +21,7 @@ pub struct MatchVideoSharePermissions {
     pub can_clip: bool,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Clone, Serialize,Deserialize)]
 #[serde(rename_all="camelCase")]
 pub struct MatchVideoShareConnection {
     pub can_share: bool,
@@ -266,4 +271,41 @@ where
         .execute(ex)
         .await?;
     Ok(())
+}
+
+pub async fn get_squad_sharing_settings(ex: &PgPool, squad_id: i64) -> Result<SquadSharingSettings, SquadOvError> {
+    Ok(
+        SquadSharingSettings{
+            disabled_games: sqlx::query!(
+                "
+                SELECT disabled_game
+                FROM squadov.squad_sharing_games_filter
+                WHERE squad_id = $1
+                ",
+                squad_id,
+            )
+                .fetch_all(ex)
+                .await?
+                .into_iter()
+                .map(|x| { Ok(SquadOvGames::try_from(x.disabled_game)?) })
+                .collect::<Result<Vec<SquadOvGames>, SquadOvError>>()?,
+            wow: sqlx::query_as!(
+                SquadWowSharingSettings,
+                "
+                SELECT
+                    disable_encounters,
+                    disable_dungeons,
+                    disable_keystones,
+                    disable_arenas,
+                    disable_bgs
+                FROM squadov.squad_sharing_wow_filters
+                WHERE squad_id = $1
+                ",
+                squad_id
+            )
+                .fetch_optional(ex)
+                .await?
+                .unwrap_or(SquadWowSharingSettings::default())
+        }
+    )
 }
