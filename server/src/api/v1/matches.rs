@@ -12,11 +12,14 @@ use squadov_common::{
     games,
     matches::{RecentMatch, BaseRecentMatch, MatchPlayerPair},
     aimlab::AimlabTask,
-    riot::db as riot_db,
-    riot::games::{
-        LolPlayerMatchSummary,
-        TftPlayerMatchSummary,
-        ValorantPlayerMatchSummary,
+    riot::{
+        db as riot_db,
+        games::{
+            LolPlayerMatchSummary,
+            TftPlayerMatchSummary,
+            ValorantPlayerMatchSummary,
+        },
+        ValorantMatchFilters,
     },
     wow::{
         WoWEncounter,
@@ -117,12 +120,14 @@ impl Default for GenericWowQuery {
 #[serde(rename_all="camelCase")]
 pub struct RecentMatchGameQuery {
     pub wow: GenericWowQuery,
+    pub valorant: ValorantMatchFilters,
 }
 
 impl Default for RecentMatchGameQuery {
     fn default() -> Self {
         Self {
             wow: GenericWowQuery::default(),
+            valorant: ValorantMatchFilters::default(),
         }
     }
 }
@@ -337,6 +342,8 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.valorant_matches AS vm
+                ON vm.match_uuid = m.uuid
             LEFT JOIN squadov.view_vod_tags AS vvt
                 ON v.video_uuid = vvt.video_uuid
             WHERE u.id = $1
@@ -388,6 +395,13 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+                AND (
+                    vm.match_uuid IS NULL OR (
+                        (NOT $38::BOOLEAN OR vm.is_ranked)
+                            AND (CARDINALITY($39::VARCHAR[]) = 0 OR vm.map_id = ANY($39))
+                            AND (CARDINALITY($40::VARCHAR[]) = 0 OR vm.game_mode = ANY($40))
+                    )
+                )
             GROUP BY v.match_uuid, v.user_uuid, v.end_time
             HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
@@ -441,6 +455,10 @@ impl api::ApiApplication {
             &filter.filters.wow.arenas.enabled,
             // TAGS - pog
             &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
+            // Valorant
+            filter.filters.valorant.is_ranked,
+            &filter.filters.valorant.maps.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            &filter.filters.valorant.modes.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.heavy_pool)
             .await?

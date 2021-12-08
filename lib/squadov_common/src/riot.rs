@@ -59,11 +59,11 @@ pub struct TftMatchFilters {
     has_vod: Option<bool>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 #[serde(rename_all="camelCase")]
 pub struct ValorantMatchFilters {
-    maps: Option<Vec<String>>,
-    modes: Option<Vec<String>>,
-    has_vod: Option<bool>,
-    is_ranked: Option<bool>,
+    pub maps: Option<Vec<String>>,
+    pub modes: Option<Vec<String>>,
+    pub has_vod: Option<bool>,
+    pub is_ranked: Option<bool>,
 }
