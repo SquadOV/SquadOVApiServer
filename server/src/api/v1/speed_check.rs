@@ -109,9 +109,3 @@ pub async fn get_upload_speed_check_path_handler(data : web::Path<SpeedCheckFrom
         }
     ))
 }
-
-pub async fn create_speed_check_destination_handler(data : web::Path<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
-    Ok(HttpResponse::Ok().json(&
-        app.create_speed_check_destination(&data.file_name_uuid).await?
-    ))
-}

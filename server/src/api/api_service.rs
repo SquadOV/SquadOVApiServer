@@ -151,7 +151,6 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .route("", web::get().to(v1::get_upload_speed_check_path_handler))
                                 .route("", web::post().to(v1::update_user_speed_check_handler))
                                 .route("", web::delete().to(v1::clean_up_speed_check_on_cloud_handler))
-                                // .route("", web::post().to(v1::create_speed_check_destination_handler))
                         )
                 )
                 .service(
@@ -835,7 +834,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                 )
                 .service(
                     web::scope("/vod")
-                        .route("", web::post().to(v1::create_vod_destination_handler)) //
+                        .route("", web::post().to(v1::create_vod_destination_handler))
                         .route("/bulkDelete", web::post().to(v1::bulk_delete_vods_handler))
                         .service(
                             web::scope("/match/{match_uuid}")
@@ -936,7 +935,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("", web::post().to(v1::associate_vod_handler))
                                         .route("/assoc", web::get().to(v1::get_vod_association_handler))
                                         .route("/fastify", web::get().to(v1::get_vod_fastify_status_handler))
-                                        .route("/upload", web::get().to(v1::get_vod_upload_path_handler)) //
+                                        .route("/upload", web::get().to(v1::get_vod_upload_path_handler))
                                         .route("/match", web::get().to(v1::get_vod_recent_match_handler))
                                 )
                         )

@@ -350,8 +350,6 @@ impl ApiApplication {
 
     async fn create_speed_check_manager(&mut self, bucket: &str) -> Result<(), SquadOvError> {
         let speed_check_manager = match speed_check::manager::get_speed_check_manager_type(bucket) {
-            // Everything is setup for S3, but the other managers will need to be setup if we want to expand the storage capabilities.
-            // I can add on to that before I close out this ticket, but for the purpose of getting someting to work, I'm just handling everything as an S3
             VodManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
             VodManagerType::GCS => panic!("We currently do not support GCS upload for speedcheck"),
             VodManagerType::FileSystem => panic!("We currently do not support FileSystem upload for speedcheck"),
