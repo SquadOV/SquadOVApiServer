@@ -24,10 +24,10 @@ pub fn get_speed_check_manager_type(root: &str) -> VodManagerType {
 pub trait SpeedCheckManager {
     fn manager_type(&self) -> VodManagerType;
 
-    // Returns a session string that can be passed to get_segment_upload_uri
+    // Returns a session string to start the speed check upload
     async fn start_speed_check_upload(&self, file_name_uuid: &Uuid) -> Result<String, SquadOvError>;
-    // User can request to get a separate URL for each uploaded segment (though it isn't necessarily guaranteed to be different for each segment).
-    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<String, SquadOvError>;
-    
+    // This gets the next part to upload
+    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str, part: i64) -> Result<String, SquadOvError>;
+    // Not currently used, but functionality to delete the speed_check if it ever finished (probably could delete this actually)
     async fn delete_speed_check(&self, file_name_uuid: &Uuid) -> Result<(), SquadOvError>; 
 }

@@ -79,10 +79,11 @@ impl SpeedCheckManager for S3SpeedCheckManager {
         Ok(())
     }
     
-    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str) -> Result<String, SquadOvError> {
+    async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str, part: i64) -> Result<String, SquadOvError> {
         let req = UploadPartRequest{
             bucket: self.bucket.clone(),
             key: file_name_uuid.to_string(),
+            part_number: part,
             upload_id: session_id.to_string(),
             ..UploadPartRequest::default()
         };

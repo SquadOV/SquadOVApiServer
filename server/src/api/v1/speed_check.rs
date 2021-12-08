@@ -23,12 +23,20 @@ pub struct SpeedCheckData {
     speed_mbps: f64,
 }
 
+#[derive(Deserialize)]
+pub struct SpeedCheckPartQuery {
+    // Should all be set or none be set.
+    part: Option<i64>,
+    session: Option<String>,
+    bucket: Option<String>,
+}
+
 impl api::ApiApplication {
     async fn update_user_speed_check(&self, user_id: i64, speed_check_speed_mbps: f64) -> Result<(), SquadOvError> {
         sqlx::query!(
             "
             UPDATE squadov.users
-            SET speed_check = $2
+            SET speed_check_mbps = $2
             WHERE id = $1
             ",
             user_id,
@@ -43,7 +51,7 @@ impl api::ApiApplication {
         let bucket = self.speed_check.get_bucket_for_location(CloudStorageLocation::Global).ok_or(SquadOvError::InternalError(String::from("No global storage location configured for Speed Check storage.")))?;
         let manager = self.get_speed_check_manager(&bucket).await?;
         let session_id = manager.start_speed_check_upload(file_name_uuid).await?;
-        let path = manager.get_speed_check_upload_uri(file_name_uuid, &session_id).await?;
+        let path = manager.get_speed_check_upload_uri(file_name_uuid, &session_id, 1).await?;
 
         Ok(
             VodDestination{
@@ -75,7 +83,34 @@ pub async fn clean_up_speed_check_on_cloud_handler(data : web::Path<SpeedCheckFr
     Ok(HttpResponse::NoContent().finish())
 }
 
-pub async fn get_upload_speed_check_path_handler(data : web::Path<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_upload_speed_check_path_handler(data : web::Path<SpeedCheckFromUuid>, query: web::Query<SpeedCheckPartQuery>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(&
+        if let Some(session) = &query.session {
+            if let Some(bucket) = &query.bucket {
+                let part = query.part.unwrap_or(1);
+                if part > 1 {
+                    // If we have a session, bucket, and > 1 part, that means we already started the upload so it's a matter
+                    // of figuring out the next URL to upload parts to.
+                    let manager = app.get_speed_check_manager(&bucket).await?;
+                    VodDestination {
+                        url: manager.get_speed_check_upload_uri(&data.file_name_uuid, session, part).await?,
+                        bucket: bucket.clone(),
+                        session: session.clone(),
+                        loc: manager.manager_type(),
+                    }
+                } else {
+                    return Err(SquadOvError::BadRequest);
+                }
+            } else {
+                return Err(SquadOvError::BadRequest);
+            }
+        } else {
+            app.create_speed_check_destination(&data.file_name_uuid).await?
+        }
+    ))
+}
+
+pub async fn create_speed_check_destination_handler(data : web::Path<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
     Ok(HttpResponse::Ok().json(&
         app.create_speed_check_destination(&data.file_name_uuid).await?
     ))
