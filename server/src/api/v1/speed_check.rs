@@ -60,8 +60,7 @@ impl api::ApiApplication {
         .await?;
         Ok(
             SpeedCheckData{
-                // Returning -1, as this will signify the user has never run a speed check
-                speed_mbps: speedcheck.speed_check_mbps.unwrap_or(-1.0)
+                speed_mbps: speedcheck.speed_check_mbps,
             }
         )
     }

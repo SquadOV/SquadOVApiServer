@@ -1,0 +1,2 @@
+ALTER TABLE users
+ADD speed_check_mbps FLOAT NOT NULL DEFAULT -1;
