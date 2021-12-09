@@ -101,6 +101,7 @@ pub struct GenericWowQuery {
     pub encounters: WowListQuery,
     pub keystones: WowListQuery,
     pub arenas: WowListQuery,
+    pub instances: WowListQuery,
 }
 
 impl Default for GenericWowQuery {
@@ -109,6 +110,7 @@ impl Default for GenericWowQuery {
             encounters: WowListQuery::default(),
             keystones: WowListQuery::default(),
             arenas: WowListQuery::default(),
+            instances: WowListQuery::default(),
         }
     }
 }
@@ -388,6 +390,11 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+                AND (wiv.view_id IS NULL OR (
+                    $38
+                        AND (CARDINALITY($39::INTEGER[]) = 0 OR wiv.instance_type = ANY($39))
+                        AND (CARDINALITY($40::INTEGER[]) = 0 OR wiv.instance_id = ANY($40))
+                ))
             GROUP BY v.match_uuid, v.user_uuid, v.end_time
             HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
@@ -441,6 +448,10 @@ impl api::ApiApplication {
             &filter.filters.wow.arenas.enabled,
             // TAGS - pog
             &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
+            // Wow instance filters
+            &filter.filters.wow.instances.enabled,
+            &filter.filters.wow.instances.instance_types.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
+            &filter.filters.wow.instances.all_instance_ids(),
         )
             .fetch_all(&*self.heavy_pool)
             .await?
