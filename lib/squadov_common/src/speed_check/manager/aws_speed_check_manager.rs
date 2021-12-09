@@ -12,8 +12,6 @@ use rusoto_s3::{
     CreateMultipartUploadRequest,
     UploadPartRequest,
     DeleteObjectRequest,
-    CompleteMultipartUploadRequest,
-    CompletedPart,
     util::{
         PreSignedRequest,
         PreSignedRequestOption,

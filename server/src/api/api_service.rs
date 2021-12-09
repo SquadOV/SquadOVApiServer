@@ -152,6 +152,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .route("", web::post().to(v1::update_user_speed_check_handler))
                                 .route("", web::delete().to(v1::clean_up_speed_check_on_cloud_handler))
                         )
+                        .route("", web::get().to(v1::get_user_speed_check_handler))
                 )
                 .service(
                     web::scope("/bug")

@@ -7,7 +7,7 @@ use squadov_common::{
 };
 use crate::api;
 use actix_web::{web, HttpResponse, HttpRequest};
-use serde::{Deserialize};
+use serde::{Deserialize, Serialize};
 use std::default::Default;
 use crate::api::auth::SquadOVSession;
 use uuid::Uuid;
@@ -18,7 +18,7 @@ pub struct SpeedCheckFromUuid {
     file_name_uuid: Uuid,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct SpeedCheckData {
     speed_mbps: f64,
 }
@@ -45,6 +45,25 @@ impl api::ApiApplication {
             .execute(&*self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn get_user_speed_check(&self, user_id: i64) -> Result<SpeedCheckData, SquadOvError> {
+        let speedcheck = sqlx::query!(
+            "
+            SELECT speed_check_mbps 
+            FROM squadov.users 
+            WHERE id = $1
+            ",
+            user_id,
+        )
+        .fetch_one(&*self.pool)
+        .await?;
+        Ok(
+            SpeedCheckData{
+                // Returning -1, as this will signify the user has never run a speed check
+                speed_mbps: speedcheck.speed_check_mbps.unwrap_or(-1.0)
+            }
+        )
     }
 
     pub async fn create_speed_check_destination(&self, file_name_uuid: &Uuid) -> Result<VodDestination, SquadOvError> {
@@ -81,6 +100,12 @@ pub async fn update_user_speed_check_handler(app : web::Data<Arc<api::ApiApplica
 pub async fn clean_up_speed_check_on_cloud_handler(data : web::Path<SpeedCheckFromUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
     app.clean_up_speed_check_on_cloud(&data.file_name_uuid).await?;
     Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn get_user_speed_check_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+    Ok(HttpResponse::Ok().json(&app.get_user_speed_check(session.user.id).await?))
 }
 
 pub async fn get_upload_speed_check_path_handler(data : web::Path<SpeedCheckFromUuid>, query: web::Query<SpeedCheckPartQuery>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
