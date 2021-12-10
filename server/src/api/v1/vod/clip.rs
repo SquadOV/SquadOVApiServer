@@ -222,6 +222,11 @@ impl api::ApiApplication {
                 ON wiv.view_id = wmv.id
             LEFT JOIN squadov.valorant_matches AS vm
                 ON vm.match_uuid = m.uuid
+            LEFT JOIN squadov.valorant_match_computed_data AS mcd
+                ON mcd.match_uuid = vm.match_uuid
+            LEFT JOIN squadov.valorant_match_pov_computed_data AS pcd
+                ON pcd.match_uuid = vm.match_uuid
+                    AND pcd.user_id = u.id
             LEFT JOIN squadov.view_vod_tags AS vvt
                 ON v.video_uuid = vvt.video_uuid
             WHERE (
@@ -297,6 +302,18 @@ impl api::ApiApplication {
                         (NOT $41::BOOLEAN OR vm.is_ranked)
                             AND (CARDINALITY($42::VARCHAR[]) = 0 OR vm.map_id = ANY($42))
                             AND (CARDINALITY($43::VARCHAR[]) = 0 OR vm.game_mode = ANY($43))
+                            AND (CARDINALITY($44::VARCHAR[]) = 0 OR pcd.pov_agent = ANY($44))
+                            AND (NOT $45::BOOLEAN OR pcd.winner)
+                            AND ($46::INTEGER IS NULL OR pcd.rank >= $46)
+                            AND ($47::INTEGER IS NULL OR pcd.rank <= $47)
+                            AND (CARDINALITY($48::INTEGER[]) = 0 OR pcd.key_events && $48)
+                            AND (
+                                (mcd.t0_agents IS NULL AND mcd.t1_agents IS NULL)
+                                OR
+                                (mcd.t0_agents ~ $49 AND mcd.t1_agents ~ $50)
+                                OR
+                                (mcd.t0_agents ~ $50 AND mcd.t1_agents ~ $49)
+                            )
                     )
                 )
             GROUP BY vc.clip_uuid, vc.tm
@@ -360,6 +377,13 @@ impl api::ApiApplication {
             filter.filters.valorant.is_ranked,
             &filter.filters.valorant.maps.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
             &filter.filters.valorant.modes.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            &filter.filters.valorant.agent_povs.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
+            filter.filters.valorant.is_winner.unwrap_or(false),
+            filter.filters.valorant.rank_low,
+            filter.filters.valorant.rank_high,
+            &filter.filters.valorant.pov_events.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
+            &filter.filters.valorant.build_friendly_composition_filter()?,
+            &filter.filters.valorant.build_enemy_composition_filter()?,
         )
             .fetch_all(&*self.pool)
             .await?
