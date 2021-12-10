@@ -1,6 +1,17 @@
 use serde::{Serialize,Deserialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use serde_repr::{Serialize_repr, Deserialize_repr};
+use num_enum::TryFromPrimitive;
+
+#[derive(Copy, Clone, Serialize_repr, Deserialize_repr, Debug, TryFromPrimitive, PartialEq, Eq, Hash)]
+#[repr(i32)]
+pub enum ValorantMatchFilterEvents {
+    DoubleKill,
+    TripleKill,
+    QuadraKill,
+    PentaKill,
+}
 
 #[derive(Deserialize)]
 pub struct ValorantMatchlistDto {

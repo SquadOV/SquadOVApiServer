@@ -10,7 +10,6 @@ use crate::api::auth::SquadOVSession;
 use actix_web::{web, HttpResponse, HttpRequest};
 use serde::Deserialize;
 use std::sync::Arc;
-use serde_qs::actix::QsQuery;
 
 #[derive(Deserialize)]
 pub struct ValorantUserMatchListInput {
@@ -18,7 +17,7 @@ pub struct ValorantUserMatchListInput {
     puuid: String,
 }
 
-pub async fn list_valorant_matches_for_user_handler(data : web::Path<ValorantUserMatchListInput>, query: web::Query<api::PaginationParameters>, filters: QsQuery<ValorantMatchFilters>, app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_valorant_matches_for_user_handler(data : web::Path<ValorantUserMatchListInput>, query: web::Query<api::PaginationParameters>, filters: web::Json<ValorantMatchFilters>, app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
 

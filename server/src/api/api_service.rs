@@ -507,7 +507,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         ))
                                         .service(
                                             web::resource("/matches")
-                                                .route(web::get().to(v1::list_valorant_matches_for_user_handler))
+                                                .route(web::post().to(v1::list_valorant_matches_for_user_handler))
                                         )
                                         .service(
                                             web::resource("/stats")

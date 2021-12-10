@@ -397,18 +397,18 @@ impl api::ApiApplication {
                             )
                         )
                 ))
+                AND (wiv.view_id IS NULL OR (
+                    $38
+                        AND (CARDINALITY($39::INTEGER[]) = 0 OR wiv.instance_type = ANY($39))
+                        AND (CARDINALITY($40::INTEGER[]) = 0 OR wiv.instance_id = ANY($40))
+                ))
                 AND (
                     vm.match_uuid IS NULL OR (
-                        (NOT $38::BOOLEAN OR vm.is_ranked)
-                            AND (CARDINALITY($39::VARCHAR[]) = 0 OR vm.map_id = ANY($39))
-                            AND (CARDINALITY($40::VARCHAR[]) = 0 OR vm.game_mode = ANY($40))
+                        (NOT $41::BOOLEAN OR vm.is_ranked)
+                            AND (CARDINALITY($42::VARCHAR[]) = 0 OR vm.map_id = ANY($42))
+                            AND (CARDINALITY($43::VARCHAR[]) = 0 OR vm.game_mode = ANY($43))
                     )
                 )
-                AND (wiv.view_id IS NULL OR (
-                    $41
-                        AND (CARDINALITY($42::INTEGER[]) = 0 OR wiv.instance_type = ANY($42))
-                        AND (CARDINALITY($43::INTEGER[]) = 0 OR wiv.instance_id = ANY($43))
-                ))
             GROUP BY v.match_uuid, v.user_uuid, v.end_time
             HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
@@ -462,14 +462,14 @@ impl api::ApiApplication {
             &filter.filters.wow.arenas.enabled,
             // TAGS - pog
             &filter.tags.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
-            // Valorant
-            filter.filters.valorant.is_ranked,
-            &filter.filters.valorant.maps.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
-            &filter.filters.valorant.modes.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
             // Wow instance filters
             &filter.filters.wow.instances.enabled,
             &filter.filters.wow.instances.instance_types.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
             &filter.filters.wow.instances.all_instance_ids(),
+            // Valorant
+            filter.filters.valorant.is_ranked,
+            &filter.filters.valorant.maps.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            &filter.filters.valorant.modes.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
         )
             .fetch_all(&*self.heavy_pool)
             .await?

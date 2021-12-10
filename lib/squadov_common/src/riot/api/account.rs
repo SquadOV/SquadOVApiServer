@@ -188,6 +188,14 @@ impl super::RiotApiApplicationInterface {
         db::link_riot_account_to_user(&mut tx, &account.puuid, user_id).await?;
         db::store_rso_for_riot_account(&mut tx, &account.puuid, user_id, &access_token, &refresh_token, &expiration).await?;
         tx.commit().await?;
+
+        // Now that we've linked our account we need to check if we have Valorant games for the user already stored for the given PUUID.
+        // And then we need to cache the data for that so we can search things for the user's POV if necessary.
+        let valorant_match_uuids = db::get_match_uuids_contains_puuid(&*self.db, &account.puuid).await?;
+        for match_uuid in valorant_match_uuids {
+            self.request_valorant_match_player_cache_data(&match_uuid, user_id).await?;
+        }
+
         Ok(account)
     }
     
