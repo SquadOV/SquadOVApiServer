@@ -11,7 +11,6 @@ use rusoto_s3::{
     S3,
     CreateMultipartUploadRequest,
     UploadPartRequest,
-    DeleteObjectRequest,
     util::{
         PreSignedRequest,
         PreSignedRequestOption,
@@ -48,8 +47,8 @@ impl S3SpeedCheckManager {
 
 #[async_trait]
 impl SpeedCheckManager for S3SpeedCheckManager {
-    fn manager_type(&self) -> super::VodManagerType {
-        super::VodManagerType::S3
+    fn manager_type(&self) -> super::UploadManagerType {
+        super::UploadManagerType::S3
     }
 
     async fn start_speed_check_upload(&self, file_name_uuid: &Uuid) -> Result<String, SquadOvError> {
@@ -65,16 +64,6 @@ impl SpeedCheckManager for S3SpeedCheckManager {
         } else {
             Err(SquadOvError::InternalError(String::from("No AWS upload ID returned for multipart upload")))
         }
-    }
-
-    async fn delete_speed_check(&self, file_name_uuid: &Uuid) -> Result<(), SquadOvError> {
-        let req = DeleteObjectRequest{
-            bucket: self.bucket.clone(),
-            key: file_name_uuid.to_string(),
-            ..DeleteObjectRequest::default()
-        };
-        (*self.aws).as_ref().unwrap().s3.delete_object(req).await?;
-        Ok(())
     }
     
     async fn get_speed_check_upload_uri(&self, file_name_uuid: &Uuid, session_id: &str, part: i64) -> Result<String, SquadOvError> {

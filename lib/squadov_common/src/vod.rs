@@ -33,7 +33,8 @@ pub struct VodDestination {
     pub url: String,
     pub bucket: String,
     pub session: String,
-    pub loc: manager::VodManagerType,
+    pub loc: manager::UploadManagerType,
+    pub purpose: manager::UploadPurpose,
 }
 
 #[derive(Serialize,Deserialize, Clone)]

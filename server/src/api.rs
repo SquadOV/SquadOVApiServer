@@ -25,13 +25,12 @@ use squadov_common::{
     vod,
     vod::VodProcessingInterface,
     vod::manager::{
-        VodManagerType,
+        UploadManagerType,
         VodManager,
         GCSVodManager,
         FilesystemVodManager,
         S3VodManager,
     },
-    speed_check,
     speed_check::manager::{
         SpeedCheckManager,
         S3SpeedCheckManager,
@@ -339,20 +338,20 @@ impl ApiApplication {
     }
 
     async fn create_vod_manager(&mut self, bucket: &str) -> Result<(), SquadOvError> {
-        let vod_manager = match vod::manager::get_vod_manager_type(bucket) {
-            VodManagerType::GCS => Arc::new(GCSVodManager::new(bucket, self.gcp.clone()).await?) as Arc<dyn VodManager + Send + Sync>,
-            VodManagerType::S3 => Arc::new(S3VodManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn VodManager + Send + Sync>,
-            VodManagerType::FileSystem => Arc::new(FilesystemVodManager::new(bucket)?) as Arc<dyn VodManager + Send + Sync>
+        let vod_manager = match vod::manager::get_upload_manager_type(bucket) {
+            UploadManagerType::GCS => Arc::new(GCSVodManager::new(bucket, self.gcp.clone()).await?) as Arc<dyn VodManager + Send + Sync>,
+            UploadManagerType::S3 => Arc::new(S3VodManager::new(bucket, self.aws.clone(), self.config.aws.cdn.clone()).await?) as Arc<dyn VodManager + Send + Sync>,
+            UploadManagerType::FileSystem => Arc::new(FilesystemVodManager::new(bucket)?) as Arc<dyn VodManager + Send + Sync>
         };
         self.vod.new_bucket(bucket, vod_manager).await;
         Ok(())
     }
 
     async fn create_speed_check_manager(&mut self, bucket: &str) -> Result<(), SquadOvError> {
-        let speed_check_manager = match speed_check::manager::get_speed_check_manager_type(bucket) {
-            VodManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
-            VodManagerType::GCS => panic!("We currently do not support GCS upload for speedcheck"),
-            VodManagerType::FileSystem => panic!("We currently do not support FileSystem upload for speedcheck"),
+        let speed_check_manager = match vod::manager::get_upload_manager_type(bucket) {
+            UploadManagerType::S3 => Arc::new(S3SpeedCheckManager::new(bucket, self.aws.clone()).await?) as Arc<dyn SpeedCheckManager + Send + Sync>,
+            UploadManagerType::GCS => panic!("We currently do not support GCS upload for speedcheck"),
+            UploadManagerType::FileSystem => panic!("We currently do not support FileSystem upload for speedcheck"),
         };
         self.speed_check.new_bucket(bucket, speed_check_manager).await;
         Ok(())
