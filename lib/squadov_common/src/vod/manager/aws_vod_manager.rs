@@ -8,16 +8,13 @@ use crate::{
     },
 };
 use std::sync::Arc;
-use futures_util::TryStreamExt;
 use rusoto_s3::{
     S3,
-    StreamingBody,
     GetObjectRequest,
     GetObjectAclRequest,
     GetObjectTaggingRequest,
     PutObjectAclRequest,
     PutObjectTaggingRequest,
-    PutObjectRequest,
     DeleteObjectRequest,
     CreateMultipartUploadRequest,
     UploadPartRequest,
@@ -30,14 +27,15 @@ use rusoto_s3::{
         PreSignedRequestOption,
     }
 };
-use tokio::fs::{
-    File as TFile
+use tokio::{
+    fs::{
+        File as TFile
+    },
+    io::AsyncReadExt,
 };
-use tokio_util::codec::{BytesCodec, FramedRead};
 use rusoto_credential::ProvideAwsCredentials;
 use md5::Digest;
 use async_trait::async_trait;
-use actix_web::web::{BytesMut};
 
 const S3_URI_PREFIX : &'static str = "s3://";
 const S3_ALL_USERS_GROUP: &'static str = "http://acs.amazonaws.com/groups/global/AllUsers";
@@ -124,44 +122,82 @@ impl VodManager for S3VodManager {
     }
 
     async fn upload_vod_from_file(&self, segment: &VodSegmentId, path: &std::path::Path) -> Result<(), SquadOvError> {
-        for _i in 0..5 {
-            let md5_hash = {
-                let mut file = std::fs::File::open(path)?;
-                let mut hasher = md5::Md5::new();
-                std::io::copy(&mut file, &mut hasher)?;
-                let hash = hasher.finalize();
-                base64::encode(hash)
-            };
-    
-            let file_byte_size = {
-                let file = std::fs::File::open(path)?;
-                file.metadata()?.len()
-            };
+        // We need to do a multi-part upload to S3 because otherwise we run the risk of
+        //  1) the video being too large so the regular PUT request fails or
+        //  2) the time it takes to upload is too long which results in a timeout.
+        let upload_id = self.start_segment_upload(segment).await?;
 
-            let file = TFile::open(path).await?;
-            let framed_read = FramedRead::new(file, BytesCodec::new()).map_ok(BytesMut::freeze);
-            let req = PutObjectRequest{
-                bucket: self.bucket.clone(),
-                body: Some(
-                    StreamingBody::new(framed_read)
-                ),
-                content_md5: Some(md5_hash),
-                content_length: Some(file_byte_size as i64),
-                content_type: Some(String::from("application/octet-stream")),
-                key: segment.get_fname(),
-                ..PutObjectRequest::default()
-            };
+        // Since we're uploading from a file we can pre-determine how many segments we're going to use
+        // based off of the file size.
+        let mut bytes_left_to_upload = {
+            let file = std::fs::File::open(path)?;
+            file.metadata()?.len()
+        };
 
-            match (*self.aws).as_ref().unwrap().s3.put_object(req).await {
-                Ok(_) => return Ok(()),
-                Err(err) => {
-                    log::warn!("Failed to do AWS S3 PUT {:?} - RETRYING", err);
-                    continue;
+        // 100 Megabyte segments should be enough to get some decent
+        // upload efficiencies where we aren't constantly uploading small chunks of data.
+        let max_part_size_bytes: u64 = 100 * 1024 * 1024;
+        let num_parts = (bytes_left_to_upload as f32 / max_part_size_bytes as f32).ceil() as u64;
+
+        let mut file = TFile::open(path).await?;
+        let mut parts: Vec<String> = vec![];
+        let mut offset: u64 = 0;
+        for part in 0..num_parts {
+            // We should be able to retry each individual part if a part upload fails for whatever eason
+            // to get a reasonable amount of resilience to failure.
+            let mut success = false;
+            for _i in 0i32..5i32 {
+                let part_size_bytes = std::cmp::min(bytes_left_to_upload, max_part_size_bytes);
+                let mut buffer: Vec<u8> = vec![0; part_size_bytes as usize];
+                file.seek(std::io::SeekFrom::Start(offset)).await?;
+                file.read_exact(&mut buffer).await?;
+
+                let md5_hash = {
+                    let mut hasher = md5::Md5::new();
+                    hasher.update(&buffer);
+                    let hash = hasher.finalize();
+                    base64::encode(hash)
+                };
+
+                let req = UploadPartRequest{
+                    bucket: self.bucket.clone(),
+                    key: segment.get_fname(),
+                    part_number: part as i64 + 1,
+                    upload_id: upload_id.clone(),
+                    body: Some(
+                        buffer.into()
+                    ),
+                    content_md5: Some(md5_hash),
+                    content_length: Some(part_size_bytes as i64),
+                    ..UploadPartRequest::default()
+                };
+
+                let resp = match (*self.aws).as_ref().unwrap().s3.upload_part(req).await {
+                    Ok(r) => r,
+                    Err(err) => {
+                        log::warn!("Failed to do AWS S3 part upload {:?} - RETRYING", err);
+                        async_std::task::sleep(std::time::Duration::from_millis(123)).await;
+                        continue;
+                    }
+                };
+
+                if let Some(e_tag) = resp.e_tag {
+                    parts.push(e_tag.clone());
                 }
-            };
+
+                success = true;
+                bytes_left_to_upload -= part_size_bytes;
+                offset += part_size_bytes;
+                break;
+            }
+
+            if !success {
+                return Err(SquadOvError::InternalError(String::from("Failed to Upload VOD [multi-part] - Exceeded retry limit for a part")));
+            }
         }
-        
-        Err(SquadOvError::InternalError(String::from("Failed to Upload VOD - Exceeded retry limit")))
+
+        self.finish_segment_upload(segment, &upload_id, &parts).await?;
+        Ok(())
     }
 
     async fn is_vod_session_finished(&self, _session: &str) -> Result<bool, SquadOvError> {
