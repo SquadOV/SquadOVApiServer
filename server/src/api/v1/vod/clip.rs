@@ -206,6 +206,8 @@ impl api::ApiApplication {
             LEFT JOIN squadov.view_share_connections_access_users AS vau
                 ON vau.video_uuid = v.video_uuid
                     AND vau.user_id = $1
+            LEFT JOIN squadov.share_match_vod_connections AS svc2
+                ON svc2.id = vau.id
             LEFT JOIN squadov.user_profile_vods AS upv
                 ON upv.video_uuid = vc.clip_uuid
                     AND upv.user_id = vc.clip_user_id
@@ -231,11 +233,16 @@ impl api::ApiApplication {
                     )
                 )
                 OR
-                vau.video_uuid IS NOT NULL
+                (
+                    vau.video_uuid IS NOT NULL
+                    AND
+                    (
+                        CARDINALITY($6::BIGINT[]) = 0 OR svc2.dest_squad_id = ANY($6)
+                    )
+                )
             )
                 AND ($4::UUID IS NULL OR m.uuid = $4)
                 AND (CARDINALITY($5::INTEGER[]) = 0 OR m.game = ANY($5))
-                AND (CARDINALITY($6::BIGINT[]) = 0 OR sra.squad_id = ANY($6))
                 AND (CARDINALITY($7::BIGINT[]) = 0 OR vc.clip_user_id = ANY($7))
                 AND COALESCE(v.end_time >= $8, TRUE)
                 AND COALESCE(v.end_time <= $9, TRUE)

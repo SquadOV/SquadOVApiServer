@@ -302,10 +302,10 @@ impl api::ApiApplication {
                 FROM squadov.view_share_connections_access_users AS vi
                 INNER JOIN squadov.vods AS v
                     ON v.video_uuid = vi.video_uuid
-                LEFT JOIN squadov.squad_role_assignments AS sra
-                    ON sra.user_id = vi.source_user_id
+                INNER JOIN squadov.share_match_vod_connections AS mvc
+		            ON mvc.id = vi.id
                 WHERE vi.user_id = $1
-                    AND (CARDINALITY($5::BIGINT[]) = 0 OR sra.squad_id = ANY($5))
+                    AND (CARDINALITY($5::BIGINT[]) = 0 OR mvc.dest_squad_id = ANY($5))
                     AND v.match_uuid IS NOT NULL
                     AND v.user_uuid IS NOT NULL
                     AND v.start_time IS NOT NULL

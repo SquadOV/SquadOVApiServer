@@ -86,7 +86,6 @@ impl api::ApiApplication {
             //      a) This isn't a core inner loop so the slowness should be OK.
             //      b) A user won't be in a bajillion squads that'd make this significantly slow.
             // Chances are this is going to change in the future. :)
-
             for conn in &auto_connections {
                 if !conn.games.contains(&game) {
                     continue;
