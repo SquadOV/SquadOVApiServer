@@ -415,6 +415,7 @@ impl ApiApplication {
 
             if config.rabbitmq.enable_valorant {
                 RabbitMqInterface::add_listener(rabbitmq.clone(), config.rabbitmq.valorant_queue.clone(), valorant_itf.clone(), config.rabbitmq.prefetch_count).await.unwrap();
+                RabbitMqInterface::add_listener(rabbitmq.clone(), config.rabbitmq.misc_valorant_queue.clone(), valorant_itf.clone(), config.rabbitmq.prefetch_count).await.unwrap();
             }
 
             if config.rabbitmq.enable_lol {

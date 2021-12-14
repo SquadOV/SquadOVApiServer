@@ -11,6 +11,7 @@ use crate::{
 };
 use super::RiotApiTask;
 use crate::riot::db;
+use uuid::Uuid;
 
 const RIOT_MAX_AGE_SECONDS: i64 = 86400; // 1 day
 
@@ -99,6 +100,16 @@ impl super::RiotApiApplicationInterface {
                 }
             };
             db::store_valorant_match_dto(&mut tx, &match_uuid, &valorant_match).await?;
+            db::cache_valorant_match_information(&mut tx, &match_uuid).await?;
+
+            // Cache POV information for each player already registered to squadov
+            // We do this for users who have their accounts linked already because we need to cache relative to user ids.
+            // We'll fill in that information for other users when/if they ever link their account.
+            let match_user_ids = db::get_squadov_user_ids_in_valorant_match(&mut tx, &match_uuid).await?;
+            for user_id in match_user_ids {
+                db::cache_valorant_player_pov_information(&mut tx, &match_uuid, user_id).await?;
+            }
+
             tx.commit().await?;
             break;
         }
@@ -116,6 +127,14 @@ impl super::RiotApiApplicationInterface {
             match_id: String::from(match_id),
             shard: String::from(shard),
         })?, priority, RIOT_MAX_AGE_SECONDS).await;
+        Ok(())
+    }
+
+    pub async fn request_valorant_match_player_cache_data(&self, match_uuid: &Uuid, user_id: i64) -> Result<(), SquadOvError> {
+        self.rmq.publish(&self.mqconfig.misc_valorant_queue, serde_json::to_vec(&RiotApiTask::ValorantMatchPlayerCacheData{
+            match_uuid: match_uuid.clone(),
+            user_id,
+        })?, RABBITMQ_DEFAULT_PRIORITY, RIOT_MAX_AGE_SECONDS).await;
         Ok(())
     }
 }
