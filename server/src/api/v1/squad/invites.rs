@@ -577,7 +577,8 @@ pub async fn delete_user_squad_invite_link_handler(app : web::Data<Arc<api::ApiA
 #[derive(Serialize)]
 pub struct SquadInviteLinkData {
     squad: SquadOvSquad,
-    inviter: SquadOVUserHandle
+    inviter: SquadOVUserHandle,
+    referral: Option<String>,
 }
 
 pub async fn get_public_invite_link_data_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::SquadPublicLinkPathInput>) -> Result<HttpResponse, SquadOvError> {
@@ -589,6 +590,7 @@ pub async fn get_public_invite_link_data_handler(app : web::Data<Arc<api::ApiApp
     Ok(HttpResponse::Ok().json(SquadInviteLinkData{
         squad,
         inviter,
+        referral: app.get_user_referral_code(invite.user_id).await?,
     }))
 }
 
