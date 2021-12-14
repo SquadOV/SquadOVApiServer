@@ -11,6 +11,7 @@ use squadov_common::{
     SquadSharingSettings,
     SquadWowSharingSettings,
     SquadOvGames,
+    SquadOvWowRelease,
 };
 use std::convert::TryFrom;
 use sqlx::{Transaction, Postgres};
@@ -306,15 +307,15 @@ impl api::ApiApplication {
                     .into_iter()
                     .map(|x| { Ok(SquadOvGames::try_from(x.disabled_game)?) })
                     .collect::<Result<Vec<SquadOvGames>, SquadOvError>>()?,
-                wow: sqlx::query_as!(
-                    SquadWowSharingSettings,
+                wow: sqlx::query!(
                     "
                     SELECT
                         disable_encounters,
                         disable_dungeons,
                         disable_keystones,
                         disable_arenas,
-                        disable_bgs
+                        disable_bgs,
+                        disabled_releases
                     FROM squadov.squad_sharing_wow_filters
                     WHERE squad_id = $1
                     ",
@@ -322,7 +323,18 @@ impl api::ApiApplication {
                 )
                     .fetch_optional(&*self.pool)
                     .await?
-                    .unwrap_or(SquadWowSharingSettings::default())
+                    .map_or::<Result<SquadWowSharingSettings, SquadOvError>, _>(Ok(SquadWowSharingSettings::default()), |x| {
+                        Ok(SquadWowSharingSettings{
+                            disabled_releases: x.disabled_releases.into_iter().map(|y| {
+                                Ok(SquadOvWowRelease::try_from(y)?)
+                            }).collect::<Result<Vec<SquadOvWowRelease>, SquadOvError>>()?,
+                            disable_encounters: x.disable_encounters,
+                            disable_dungeons: x.disable_dungeons,
+                            disable_keystones: x.disable_keystones,
+                            disable_arenas: x.disable_arenas,
+                            disable_bgs: x.disable_bgs,
+                        })
+                    })?
             }
         )
     }
@@ -365,7 +377,8 @@ impl api::ApiApplication {
                 disable_bgs,
                 disable_dungeons,
                 disable_encounters,
-                disable_keystones
+                disable_keystones,
+                disabled_releases
             )
             VALUES (
                 $1,
@@ -373,14 +386,16 @@ impl api::ApiApplication {
                 $3,
                 $4,
                 $5,
-                $6
+                $6,
+                $7
             )
             ON CONFLICT (squad_id) DO UPDATE SET
                 disable_arenas = EXCLUDED.disable_arenas,
                 disable_bgs = EXCLUDED.disable_bgs,
                 disable_dungeons = EXCLUDED.disable_dungeons,
                 disable_encounters = EXCLUDED.disable_encounters,
-                disable_keystones = EXCLUDED.disable_keystones
+                disable_keystones = EXCLUDED.disable_keystones,
+                disabled_releases = EXCLUDED.disabled_releases
             ",
             squad_id,
             settings.wow.disable_arenas,
@@ -388,6 +403,7 @@ impl api::ApiApplication {
             settings.wow.disable_dungeons,
             settings.wow.disable_encounters,
             settings.wow.disable_keystones,
+            &settings.wow.disabled_releases.iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
         )
             .execute(&mut *tx)
             .await?;
