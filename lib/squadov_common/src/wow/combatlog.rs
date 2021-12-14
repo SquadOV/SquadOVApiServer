@@ -280,6 +280,15 @@ fn parse_wow_covenant_from_str(s: &str) -> Result<Option<WowCovenantInfo>, Squad
     )
 }
 
+fn parse_creature_id_from_guid(guid: &str) -> Result<Option<i64>, SquadOvError> {
+    let parts = guid.split("-").collect::<Vec<&str>>();
+    if parts.len() != 7 || (parts[0] != "Creature" && parts[0] != "Vehicle") {
+        return Ok(None)
+    }
+    
+    Ok(Some(parts[5].parse::<i64>()?))
+}
+
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 pub struct WowClassUpdateFromSpell {
     player_guid: String,
@@ -821,7 +830,8 @@ async fn insert_missing_wow_character_presence_for_events(tx: &mut Transaction<'
             unit_name,
             owner_guid,
             flags,
-            has_combatant_info
+            has_combatant_info,
+            creature_id
         )
         VALUES
     "));
@@ -853,14 +863,15 @@ async fn insert_missing_wow_character_presence_for_events(tx: &mut Transaction<'
                     {unit_name},
                     {owner_guid},
                     {flags},
-                    FALSE
+                    FALSE,
+                    {creature_id}
                 )",
                     view_id=&e.view_id,
                     unit_guid=&source.guid,
                     unit_name=&crate::sql_format_string(&source.name),
                     owner_guid=crate::sql_format_option_string(if matches_pet { &owner_guid } else { &None }),
                     flags=source.flags,
-
+                    creature_id=crate::sql_format_option_value(&parse_creature_id_from_guid(&source.guid)?),
                 ));
                 sql.push(String::from(","));
                 added += 1;
@@ -876,14 +887,15 @@ async fn insert_missing_wow_character_presence_for_events(tx: &mut Transaction<'
                     {unit_name},
                     {owner_guid},
                     {flags},
-                    FALSE
+                    FALSE,
+                    {creature_id}
                 )",
                     view_id=&e.view_id,
                     unit_guid=&dest.guid,
                     unit_name=&crate::sql_format_string(&dest.name),
                     owner_guid=crate::sql_format_option_string(if matches_pet { &owner_guid } else { &None }),
                     flags=dest.flags,
-
+                    creature_id=crate::sql_format_option_value(&parse_creature_id_from_guid(&dest.guid)?),
                 ));
                 sql.push(String::from(","));
                 added += 1;
@@ -897,7 +909,8 @@ async fn insert_missing_wow_character_presence_for_events(tx: &mut Transaction<'
                 NULL,
                 NULL,
                 0,
-                TRUE
+                TRUE,
+                NULL
             )",
                 view_id=&e.view_id,
                 unit_guid=&guid,
@@ -971,6 +984,7 @@ async fn update_wow_character_presence_for_events(tx: &mut Transaction<'_, Postg
         if let Some(source) = &e.source {
             if source.guid != crate::NIL_WOW_GUID {
                 let matches_pet = pet_guid.as_ref().unwrap_or(&String::from(crate::NIL_WOW_GUID)) == &source.guid;
+
                 sql.push(format!("(
                     '{view_id}',
                     '{unit_guid}',
@@ -1991,6 +2005,43 @@ async fn bulk_insert_wow_events(tx: &mut Transaction<'_, Postgres>, events: Vec<
     Ok(())
 }
 
+async fn bulk_update_advanced_log_cvars(tx: &mut Transaction<'_, Postgres>, events: &[WoWCombatLogEvent]) -> Result<(), SquadOvError> {
+    let mut view_ids: Vec<Uuid> = vec![];
+    let mut unit_guids: Vec<String> = vec![];
+    let mut current_hp: Vec<i64> = vec![];
+    let mut max_hp: Vec<i64> = vec![];
+
+    for e in events {
+        if let Some(adv) = e.advanced.as_ref() {
+            view_ids.push(e.view_id.clone());
+            unit_guids.push(adv.unit_guid.clone());
+            current_hp.push(adv.current_hp);
+            max_hp.push(adv.max_hp);
+        }
+    }
+
+    if !view_ids.is_empty() {
+        sqlx::query!(
+            "
+            UPDATE squadov.wow_match_view_character_presence AS wcp
+            SET current_hp = COALESCE(t.hp, wcp.current_hp),
+                max_hp = COALESCE(t.max, wcp.max_hp)
+            FROM UNNEST($1::UUID[], $2::VARCHAR[], $3::BIGINT[], $4::BIGINT[]) AS t(view_id, unit_guid, hp, max)
+            WHERE wcp.view_id = t.view_id
+                AND wcp.unit_guid = t.unit_guid
+            ",
+            &view_ids,
+            &unit_guids,
+            &current_hp,
+            &max_hp,
+        )
+            .execute(tx)
+            .await?;
+    }
+
+    Ok(())
+}
+
 pub async fn store_wow_combat_log_events(tx: &mut Transaction<'_, Postgres>, events: Vec<WoWCombatLogEvent>) -> Result<(), SquadOvError> {
     // First we filter out events we don't need. We're parsing more events than we care to store at the moment.
     // That is NOT an error in parsing as some events are crucial for our Kafka logic such as knowing when to
@@ -2046,11 +2097,14 @@ pub async fn store_wow_combat_log_events(tx: &mut Transaction<'_, Postgres>, eve
     //          3) Unit Name
     let character_id_map = update_wow_character_presence_for_events(&mut *tx, &events).await?;
 
-    //  3) Bullk add into the "wow_match_view_events". We are able to obtain proper values for source_char and dest_char
+    //  3) Do another pass to handle the advanced variables (e.g. the current HP and max HP).
+    bulk_update_advanced_log_cvars(&mut *tx, &events).await?;
+
+    //  4) Bullk add into the "wow_match_view_events". We are able to obtain proper values for source_char and dest_char
     //     from the previous two operations.
     let event_ids = create_wow_events(&mut *tx, &events, &character_id_map).await?;
 
-    //  4) AT THIS POINT THE LOGIC MUST SPLIT DEPENDING ON THE TYPE OF THE INCOMING EVENT.
+    //  5) AT THIS POINT THE LOGIC MUST SPLIT DEPENDING ON THE TYPE OF THE INCOMING EVENT.
     //     a) COMBATANT_INFO: We can pull character_id from steps #1 and #2. So it becomes trivial to
     //                        bulk add into the wow_match_view_combatants and wow_match_view_combatant_items tables.
     //                        
@@ -2058,6 +2112,7 @@ pub async fn store_wow_combat_log_events(tx: &mut Transaction<'_, Postgres>, eve
     //                        table to know that the combatant info exists.
     //     b) All other events are trivially bulk insertable - the only thing that changes between them is the table/data that we insert into.
     bulk_insert_wow_events(&mut *tx, events, &event_ids, &character_id_map).await?;
+
     Ok(())
 }
 
@@ -2070,6 +2125,28 @@ mod tests {
     fn init() {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn test_parse_creature_id() {
+        init();
+
+        struct TestDatum {
+            input: &'static str,
+            output: i64,
+        }
+
+        let test_data = vec![
+            TestDatum{
+                input: r#"Creature-0-4227-2296-24852-165066-0000504990"#,
+                output: 165066,
+            },
+        ];
+
+        for td in &test_data {
+            let creature_id = parse_creature_id_from_guid(td.input).unwrap();
+            assert_eq!(creature_id, Some(td.output));
+        }
     }
 
     #[test]

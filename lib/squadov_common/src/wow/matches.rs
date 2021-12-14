@@ -33,27 +33,30 @@ pub struct WoWEncounterEnd {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WowBossStatus {
+    pub name: String,
+    pub npc_id: i64,
+    pub current_hp: Option<i64>,
+    pub max_hp: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct WoWEncounter {
-    #[serde(rename="matchUuid")]
     pub match_uuid: Uuid,
     pub tm: DateTime<Utc>,
-    #[serde(rename="combatantsKey")]
     pub combatants_key: String,
-    #[serde(rename="encounterId")]
     pub encounter_id: i32,
-    #[serde(rename="encounterName")]
     pub encounter_name: String,
     pub difficulty: i32,
-    #[serde(rename="numPlayers")]
     pub num_players: i32,
-    #[serde(rename="instanceId")]
     pub instance_id: i32,
-    #[serde(rename="finishTime")]
     pub finish_time: Option<DateTime<Utc>>,
     pub success: bool,
-    #[serde(rename="userUuid")]
     pub user_uuid: Uuid,
-    pub build: String
+    pub build: String,
+    pub boss: Vec<WowBossStatus>,
 }
 
 #[derive(Deserialize)]
