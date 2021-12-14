@@ -2,9 +2,14 @@ use crate::api;
 use crate::api::auth::SquadOVSession;
 use serde::{Serialize, Deserialize};
 use actix_web::{web, HttpResponse, HttpRequest};
-use squadov_common::SquadOvError;
+use squadov_common::{
+    SquadOvError,
+    SquadOvGames,
+    share::MatchVideoShareConnection,
+};
 use std::sync::Arc;
 use sqlx::{Transaction, Executor, Postgres};
+use std::convert::TryFrom;
 
 #[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -71,84 +76,52 @@ impl api::ApiApplication {
         let settings = self.get_user_auto_share_settings(&mut *tx, user_id).await?;
 
         if settings.share_on_join {
-            // Need to do matches and clips separately since clips don't need match uuid attached.
-            sqlx::query!(
-                "
-                INSERT INTO squadov.share_match_vod_connections (
-                    match_uuid,
-                    video_uuid,
-                    source_user_id,
-                    dest_user_id,
-                    dest_squad_id,
-                    can_share,
-                    can_clip,
-                    parent_connection_id,
-                    share_depth
-                )
-                SELECT
-                    v.match_uuid,
-                    v.video_uuid,
-                    $1,
-                    NULL,
-                    $2,
-                    TRUE,
-                    TRUE,
-                    NULL,
-                    0
+            // Pull in all the user's VODs and clips and stick them onto RabbitMQ to process for sharing.
+            // Since we don't want to do hundreds of database queries of checking the user's permissions, squad permissions, etc.
+            let shareable_vods = sqlx::query!(
+                r#"
+                SELECT v.video_uuid, v.match_uuid, v.is_clip, m.game AS "game!"
                 FROM squadov.vods AS v
                 INNER JOIN squadov.users AS u
                     ON u.uuid = v.user_uuid
-                WHERE is_clip = FALSE
-                    AND u.id = $1
+                INNER JOIN squadov.matches AS m
+                    ON m.uuid = v.match_uuid
+                WHERE u.id = $1
                     AND v.match_uuid IS NOT NULL
                     AND v.user_uuid IS NOT NULL
                     AND v.start_time IS NOT NULL
                     AND v.end_time IS NOT NULL
-                ",
+                "#,
                 user_id,
-                squad_id,
             )
-                .execute(&mut *tx)
+                .fetch_all(&mut *tx)
                 .await?;
 
-            sqlx::query!(
-                "
-                INSERT INTO squadov.share_match_vod_connections (
-                    match_uuid,
-                    video_uuid,
-                    source_user_id,
-                    dest_user_id,
-                    dest_squad_id,
-                    can_share,
-                    can_clip,
-                    parent_connection_id,
-                    share_depth
-                )
-                SELECT
-                    NULL,
-                    v.video_uuid,
-                    $1,
-                    NULL,
-                    $2,
-                    TRUE,
-                    TRUE,
-                    NULL,
-                    0
-                FROM squadov.vods AS v
-                INNER JOIN squadov.users AS u
-                    ON u.uuid = v.user_uuid
-                WHERE is_clip = TRUE
-                    AND u.id = $1
-                    AND v.match_uuid IS NOT NULL
-                    AND v.user_uuid IS NOT NULL
-                    AND v.start_time IS NOT NULL
-                    AND v.end_time IS NOT NULL
-                ",
-                user_id,
-                squad_id,
-            )
-                .execute(&mut *tx)
-                .await?;
+            for v in shareable_vods {
+                match self.sharing_itf.request_vod_share_to_squad(
+                    user_id,
+                    &v.match_uuid.clone().unwrap(),
+                    SquadOvGames::try_from(v.game)?,
+                    squad_id,
+                    &MatchVideoShareConnection{
+                        can_share: true,
+                        can_clip: true,
+                        id: -1,
+                        match_uuid: if v.is_clip {
+                            None
+                        } else {
+                            v.match_uuid.clone()
+                        },
+                        video_uuid: Some(v.video_uuid.clone()),
+                        dest_user_id: None,
+                        dest_squad_id: Some(squad_id),
+                    },
+                    None,
+                ).await {
+                    Ok(_) => (),
+                    Err(err) => log::warn!("Failed to share to squad: {:?}", err)
+                };
+            }
         }
         Ok(())
     }

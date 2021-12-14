@@ -9,11 +9,8 @@ use squadov_common::{
     SquadRole,
     SquadOvSquadMembership,
     SquadSharingSettings,
-    SquadWowSharingSettings,
-    SquadOvGames,
-    SquadOvWowRelease,
+    share,
 };
-use std::convert::TryFrom;
 use sqlx::{Transaction, Postgres};
 
 impl api::ApiApplication {
@@ -291,54 +288,6 @@ impl api::ApiApplication {
         )
     }
 
-    pub async fn get_squad_sharing_settings(&self, squad_id: i64) -> Result<SquadSharingSettings, SquadOvError> {
-        Ok(
-            SquadSharingSettings{
-                disabled_games: sqlx::query!(
-                    "
-                    SELECT disabled_game
-                    FROM squadov.squad_sharing_games_filter
-                    WHERE squad_id = $1
-                    ",
-                    squad_id,
-                )
-                    .fetch_all(&*self.pool)
-                    .await?
-                    .into_iter()
-                    .map(|x| { Ok(SquadOvGames::try_from(x.disabled_game)?) })
-                    .collect::<Result<Vec<SquadOvGames>, SquadOvError>>()?,
-                wow: sqlx::query!(
-                    "
-                    SELECT
-                        disable_encounters,
-                        disable_dungeons,
-                        disable_keystones,
-                        disable_arenas,
-                        disable_bgs,
-                        disabled_releases
-                    FROM squadov.squad_sharing_wow_filters
-                    WHERE squad_id = $1
-                    ",
-                    squad_id
-                )
-                    .fetch_optional(&*self.pool)
-                    .await?
-                    .map_or::<Result<SquadWowSharingSettings, SquadOvError>, _>(Ok(SquadWowSharingSettings::default()), |x| {
-                        Ok(SquadWowSharingSettings{
-                            disabled_releases: x.disabled_releases.into_iter().map(|y| {
-                                Ok(SquadOvWowRelease::try_from(y)?)
-                            }).collect::<Result<Vec<SquadOvWowRelease>, SquadOvError>>()?,
-                            disable_encounters: x.disable_encounters,
-                            disable_dungeons: x.disable_dungeons,
-                            disable_keystones: x.disable_keystones,
-                            disable_arenas: x.disable_arenas,
-                            disable_bgs: x.disable_bgs,
-                        })
-                    })?
-            }
-        )
-    }
-
     pub async fn update_squad_sharing_settings(&self, tx : &mut Transaction<'_, Postgres>, squad_id: i64, settings: &SquadSharingSettings) -> Result<(), SquadOvError> {
         // Need to delete everything from squad_sharing_games_filter and then insert again
         // so we get make sure that the input disabled_games vec is authoritative.
@@ -440,7 +389,7 @@ pub async fn get_user_discover_squads_handler(app : web::Data<Arc<api::ApiApplic
 
 pub async fn get_squad_share_settings_handler(app : web::Data<Arc<api::ApiApplication>>, path : web::Path<super::SquadSelectionInput>) -> Result<HttpResponse, SquadOvError> {
     Ok(HttpResponse::Ok().json(
-        &app.get_squad_sharing_settings(path.squad_id).await?
+        &share::get_squad_sharing_settings(&*app.pool, path.squad_id).await?
     ))
 }
 

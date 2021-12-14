@@ -72,6 +72,7 @@ use squadov_common::{
     discord::{
         DiscordConfig,
     },
+    share::rabbitmq::SharingRabbitmqInterface,
 };
 use url::Url;
 use std::vec::Vec;
@@ -270,6 +271,7 @@ pub struct ApiApplication {
     pub csgo_itf: Arc<CsgoRabbitmqInterface>,
     pub steam_itf: Arc<SteamApiRabbitmqInterface>,
     pub twitch_itf: Arc<TwitchApiRabbitmqInterface>,
+    pub sharing_itf: Arc<SharingRabbitmqInterface>,
     gcp: Arc<Option<GCPClient>>,
     aws: Arc<Option<AWSClient>>,
     pub hashid: Arc<harsh::Harsh>,
@@ -404,6 +406,7 @@ impl ApiApplication {
         let steam_itf = Arc::new(SteamApiRabbitmqInterface::new(steam_api.clone(), &config.rabbitmq, rabbitmq.clone(), pool.clone()));
         let csgo_itf = Arc::new(CsgoRabbitmqInterface::new(steam_itf.clone(), &config.rabbitmq, rabbitmq.clone(), pool.clone()));
         let twitch_itf = Arc::new(TwitchApiRabbitmqInterface::new(config.twitch.clone(), config.rabbitmq.clone(), rabbitmq.clone(), pool.clone()));
+        let sharing_itf = Arc::new(SharingRabbitmqInterface::new(config.rabbitmq.clone(), rabbitmq.clone(), pool.clone()));
 
         if !disable_rabbitmq {
             if config.rabbitmq.enable_rso {
@@ -432,6 +435,10 @@ impl ApiApplication {
 
             if config.rabbitmq.enable_twitch {
                 RabbitMqInterface::add_listener(rabbitmq.clone(), config.rabbitmq.twitch_queue.clone(), twitch_itf.clone(), config.rabbitmq.prefetch_count).await.unwrap();
+            }
+
+            if config.rabbitmq.enable_sharing {
+                RabbitMqInterface::add_listener(rabbitmq.clone(), config.rabbitmq.sharing_queue.clone(), sharing_itf.clone(), config.rabbitmq.prefetch_count).await.unwrap();
             }
         }
 
@@ -473,6 +480,7 @@ impl ApiApplication {
             csgo_itf,
             steam_itf,
             twitch_itf,
+            sharing_itf,
             gcp,
             aws,
             hashid: Arc::new(harsh::Harsh::builder().salt(config.squadov.hashid_salt.as_str()).length(6).build().unwrap()),
