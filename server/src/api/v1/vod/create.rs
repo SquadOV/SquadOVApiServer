@@ -215,7 +215,7 @@ pub async fn associate_vod_handler(path: web::Path<VodAssociatePathInput>, data 
 
     // Once the VOD is finished - we need to take care of who we actually want to share the match/VOD/clip with.
     if !data.association.is_local {
-        app.handle_vod_share(&mut tx, &session.user, &data.association).await?;
+        app.handle_vod_share(&mut tx, session.user.id, &data.association).await?;
     }
 
     tx.commit().await?;

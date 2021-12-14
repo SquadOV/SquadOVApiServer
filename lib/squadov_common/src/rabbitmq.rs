@@ -46,6 +46,8 @@ pub struct RabbitMqConfig {
     pub enable_twitch: bool,
     pub twitch_queue: String,
     pub misc_valorant_queue: String,
+    pub enable_sharing: bool,
+    pub sharing_queue: String,
     pub additional_queues: Option<Vec<String>>,
 }
 
@@ -172,6 +174,14 @@ impl RabbitMqConnectionBundle {
             if !config.misc_valorant_queue.is_empty() {
                 ch.queue_declare(
                     &config.misc_valorant_queue,
+                    queue_opts.clone(),
+                    default_table.clone(),
+                ).await?;
+            }
+
+            if !config.sharing_queue.is_empty() {
+                ch.queue_declare(
+                    &config.sharing_queue,
                     queue_opts.clone(),
                     default_table.clone(),
                 ).await?;

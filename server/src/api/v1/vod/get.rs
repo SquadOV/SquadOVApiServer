@@ -91,6 +91,22 @@ impl api::ApiApplication {
         )
     }
 
+    pub async fn get_vod_match_uuid(&self, video_uuid: &Uuid) -> Result<Option<Uuid>, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                "
+                SELECT match_uuid
+                FROM squadov.vods
+                WHERE video_uuid = $1
+                ",
+                video_uuid
+            )
+                .fetch_one(&*self.pool)
+                .await?
+                .match_uuid
+        )
+    }
+
     pub async fn get_vod(&self, video_uuid: &[Uuid]) -> Result<HashMap<Uuid, VodManifest>, SquadOvError> {
         let quality_options = self.get_vod_quality_options(video_uuid).await?;
         let associations = self.find_vod_associations(video_uuid).await?;

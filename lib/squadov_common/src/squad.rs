@@ -1,7 +1,7 @@
 pub mod status;
 pub mod links;
 
-use crate::{SquadOvError, SquadOvGames};
+use crate::{SquadOvError, SquadOvGames, SquadOvWowRelease};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use unicode_segmentation::UnicodeSegmentation;
@@ -58,6 +58,8 @@ pub struct SquadInvite {
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all="camelCase")]
 pub struct SquadWowSharingSettings {
+    #[serde(default)]
+    pub disabled_releases: Vec<SquadOvWowRelease>,
     pub disable_encounters: bool,
     pub disable_dungeons: bool,
     pub disable_keystones: bool,
