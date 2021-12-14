@@ -95,6 +95,22 @@ impl Default for WowListQuery {
 }
 
 impl WowListQuery {
+    pub fn all_instance_ids(&self) -> Vec<i32> {
+        let mut instance_ids: Vec<i32> = vec![];
+        if let Some(raids) = self.raids.as_ref() {
+            instance_ids.extend(raids);
+        }
+
+        if let Some(dungeons) = self.dungeons.as_ref() {
+            instance_ids.extend(dungeons);
+        }
+        
+        if let Some(arenas) = self.arenas.as_ref() {
+            instance_ids.extend(arenas);
+        }
+        instance_ids
+    }
+    
     pub fn build_friendly_composition_filter(&self) -> Result<String, SquadOvError> {
         WowListQuery::build_composition_filter(self.friendly_composition.as_ref())
     }

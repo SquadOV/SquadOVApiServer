@@ -6,6 +6,7 @@ use crate::{
     SquadSharingSettings,
     SquadWowSharingSettings,
     SquadOvGames,
+    SquadOvWowRelease,
 };
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
@@ -289,15 +290,15 @@ pub async fn get_squad_sharing_settings(ex: &PgPool, squad_id: i64) -> Result<Sq
                 .into_iter()
                 .map(|x| { Ok(SquadOvGames::try_from(x.disabled_game)?) })
                 .collect::<Result<Vec<SquadOvGames>, SquadOvError>>()?,
-            wow: sqlx::query_as!(
-                SquadWowSharingSettings,
+            wow: sqlx::query!(
                 "
                 SELECT
                     disable_encounters,
                     disable_dungeons,
                     disable_keystones,
                     disable_arenas,
-                    disable_bgs
+                    disable_bgs,
+                    disabled_releases
                 FROM squadov.squad_sharing_wow_filters
                 WHERE squad_id = $1
                 ",
@@ -305,7 +306,18 @@ pub async fn get_squad_sharing_settings(ex: &PgPool, squad_id: i64) -> Result<Sq
             )
                 .fetch_optional(ex)
                 .await?
-                .unwrap_or(SquadWowSharingSettings::default())
+                .map_or::<Result<SquadWowSharingSettings, SquadOvError>, _>(Ok(SquadWowSharingSettings::default()), |x| {
+                    Ok(SquadWowSharingSettings{
+                        disabled_releases: x.disabled_releases.into_iter().map(|y| {
+                            Ok(SquadOvWowRelease::try_from(y)?)
+                        }).collect::<Result<Vec<SquadOvWowRelease>, SquadOvError>>()?,
+                        disable_encounters: x.disable_encounters,
+                        disable_dungeons: x.disable_dungeons,
+                        disable_keystones: x.disable_keystones,
+                        disable_arenas: x.disable_arenas,
+                        disable_bgs: x.disable_bgs,
+                    })
+                })?
         }
     )
 }

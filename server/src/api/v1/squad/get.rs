@@ -326,7 +326,8 @@ impl api::ApiApplication {
                 disable_bgs,
                 disable_dungeons,
                 disable_encounters,
-                disable_keystones
+                disable_keystones,
+                disabled_releases
             )
             VALUES (
                 $1,
@@ -334,14 +335,16 @@ impl api::ApiApplication {
                 $3,
                 $4,
                 $5,
-                $6
+                $6,
+                $7
             )
             ON CONFLICT (squad_id) DO UPDATE SET
                 disable_arenas = EXCLUDED.disable_arenas,
                 disable_bgs = EXCLUDED.disable_bgs,
                 disable_dungeons = EXCLUDED.disable_dungeons,
                 disable_encounters = EXCLUDED.disable_encounters,
-                disable_keystones = EXCLUDED.disable_keystones
+                disable_keystones = EXCLUDED.disable_keystones,
+                disabled_releases = EXCLUDED.disabled_releases
             ",
             squad_id,
             settings.wow.disable_arenas,
@@ -349,6 +352,7 @@ impl api::ApiApplication {
             settings.wow.disable_dungeons,
             settings.wow.disable_encounters,
             settings.wow.disable_keystones,
+            &settings.wow.disabled_releases.iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
         )
             .execute(&mut *tx)
             .await?;
