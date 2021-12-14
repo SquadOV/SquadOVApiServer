@@ -1088,7 +1088,9 @@ async fn create_wow_events(tx: &mut Transaction<'_, Postgres>, events: &[WoWComb
             log_line,
             source_char,
             dest_char,
-            tm
+            tm,
+            source_flags,
+            dest_flags
         )
         VALUES
     "));
@@ -1110,13 +1112,17 @@ async fn create_wow_events(tx: &mut Transaction<'_, Postgres>, events: &[WoWComb
             {log_line},
             {source_char},
             {dest_char},
-            {tm}
+            {tm},
+            {source_flags},
+            {dest_flags}
         )",
             view_id=e.alt_view_id,
             log_line=e.log_line,
             source_char=crate::sql_format_option_value(&if let Some(tup) = source_tuple { mapping.get(&tup).copied() } else { None }),
             dest_char=crate::sql_format_option_value(&if let Some(tup) = dest_tuple { mapping.get(&tup).copied() } else { None }),
-            tm=crate::sql_format_time(&e.timestamp)
+            tm=crate::sql_format_time(&e.timestamp),
+            source_flags=crate::sql_format_option_value(&e.source.as_ref().map(|x| { x.flags })),
+            dest_flags=crate::sql_format_option_value(&e.dest.as_ref().map(|x| { x.flags })),
         ));
         sql.push(String::from(","));
     }

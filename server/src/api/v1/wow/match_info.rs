@@ -259,7 +259,7 @@ impl api::ApiApplication {
                     wde.event_id,
                     dest.unit_guid AS "guid",
                     COALESCE(dest.unit_name, dest.unit_guid) AS "name!",
-                    dest.flags,
+                    COALESCE(wve.dest_flags, dest.flags) AS "flags!",
                     wve.tm
                 FROM squadov.wow_match_view_death_events AS wde
                 INNER JOIN squadov.wow_match_view_events AS wve
@@ -286,7 +286,7 @@ impl api::ApiApplication {
                 SELECT
                     dest.unit_guid AS "guid",
                     COALESCE(dest.unit_name, dest.unit_guid) AS "name!",
-                    dest.flags,
+                    COALESCE(wve.dest_flags, dest.flags) AS "flags!",
                     wve.tm
                 FROM squadov.wow_match_view_resurrect_events AS wre
                 INNER JOIN squadov.wow_match_view_events AS wve
@@ -312,10 +312,10 @@ impl api::ApiApplication {
                 SELECT
                     source.unit_guid AS "source_guid",
                     COALESCE(source.unit_name, source.unit_guid) AS "source_name!",
-                    source.flags AS "source_flags",
+                    COALESCE(wve.source_flags, source.flags) AS "source_flags!",
                     dest.unit_guid AS "target_guid",
                     COALESCE(dest.unit_name, dest.unit_guid) AS "target_name!",
-                    dest.flags AS "target_flags",
+                    COALESCE(wve.dest_flags, dest.flags) AS "target_flags!",
                     wabe.aura_spell_id AS "aura_id!",
                     wabe.aura_type AS "aura_type",
                     wabe.removed_by_spell_id AS "spell_id",
@@ -361,10 +361,10 @@ impl api::ApiApplication {
             SELECT
                 source.unit_guid AS "source_guid",
                 COALESCE(source.unit_name, source.unit_guid) AS "source_name!",
-                source.flags AS "source_flags",
+                COALESCE(wve.source_flags, source.flags) AS "source_flags!",
                 dest.unit_guid AS "target_guid?",
                 COALESCE(dest.unit_name, dest.unit_guid) AS "target_name?",
-                dest.flags AS "target_flags?",
+                COALESCE(wve.dest_flags, dest.flags) AS "target_flags?",
                 msce.spell_id,
                 msce.spell_school,
                 msce.is_start,
