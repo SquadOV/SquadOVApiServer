@@ -14,6 +14,7 @@ use std::io::Read;
 use async_trait::async_trait;
 use rand::Rng;
 use actix_web::web::{BytesMut, Bytes};
+use chrono::{DateTime, Utc};
 
 const GS_URI_PREFIX : &'static str = "gs://";
 const MAX_GCS_RETRIES: i32 = 10;
@@ -61,18 +62,24 @@ impl VodManager for GCSVodManager {
         super::VodManagerType::GCS
     }
 
-    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError> {       
+    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {       
         let fname = self.get_fname_from_segment_id(segment);
         let client = self.get_gcp_client().gcs();
 
         // Do not insert a check using the Google Cloud Storage API on whether or not the object exists.
         // The GET request will lag behind the user actually finishing the uploading of the object - just
         // give them the URL and if the download fails then oh well.
-        client.create_signed_url("GET", &format!("/{}/{}", &self.bucket, fname), &BTreeMap::new())
+        Ok(
+            (
+                client.create_signed_url("GET", &format!("/{}/{}", &self.bucket, fname), &BTreeMap::new())?,
+                Some(Utc::now() + chrono::Duration::seconds(43200))
+            )
+        )
+        
     }
 
     async fn download_vod_to_path(&self, segment: &VodSegmentId, path: &std::path::Path) -> Result<(), SquadOvError> {
-        let uri = self.get_segment_redirect_uri(segment).await?;
+        let uri = self.get_segment_redirect_uri(segment).await?.0;
         let resp = reqwest::get(&uri).await?;
         let mut output_file = std::fs::File::create(path)?;
         let body = resp.bytes().await?;

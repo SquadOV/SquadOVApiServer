@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use std::path::{Path,PathBuf};
 use std::{fs, io};
 use md5::{Md5, Digest};
+use chrono::{DateTime, Utc};
 
 pub struct FilesystemVodManager {
     root: String
@@ -39,13 +40,13 @@ impl VodManager for FilesystemVodManager {
         super::VodManagerType::FileSystem
     }
 
-    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError> {
+    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {
         let fname = self.segment_id_to_path(segment);
         if !fname.exists() {
             return Err(SquadOvError::NotFound);
         }
 
-        Ok(String::from(fname.to_str().unwrap_or("")))
+        Ok((String::from(fname.to_str().unwrap_or("")), None))
     }
 
     async fn download_vod_to_path(&self, segment: &VodSegmentId, path: &std::path::Path) -> Result<(), SquadOvError> {
@@ -86,7 +87,7 @@ impl VodManager for FilesystemVodManager {
     }
 
     async fn get_public_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError> {
-        self.get_segment_redirect_uri(segment).await
+        Ok(self.get_segment_redirect_uri(segment).await?.0)
     }
 
     async fn make_segment_public(&self, _segment: &VodSegmentId) -> Result<(), SquadOvError> {

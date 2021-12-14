@@ -12,6 +12,7 @@ use crate::{
     VodSegmentId,
 };
 use serde_repr::{Serialize_repr, Deserialize_repr};
+use chrono::{DateTime, Utc};
 
 #[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
 #[repr(i32)]
@@ -45,7 +46,7 @@ pub trait VodManager {
     async fn download_vod_to_path(&self, segment: &VodSegmentId, path: &std::path::Path) -> Result<(), SquadOvError>;
     async fn upload_vod_from_file(&self, segment: &VodSegmentId, path: &std::path::Path) -> Result<(), SquadOvError>;
     async fn is_vod_session_finished(&self, session: &str) -> Result<bool, SquadOvError>;
-    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError>;
+    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError>;
     async fn get_public_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError>;
     async fn make_segment_public(&self, segment: &VodSegmentId) -> Result<(), SquadOvError>;
     async fn check_vod_segment_is_public(&self, segment: &VodSegmentId) -> Result<bool, SquadOvError>;

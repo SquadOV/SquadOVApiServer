@@ -36,6 +36,7 @@ use tokio::{
 use rusoto_credential::ProvideAwsCredentials;
 use md5::Digest;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 const S3_URI_PREFIX : &'static str = "s3://";
 const S3_ALL_USERS_GROUP: &'static str = "http://acs.amazonaws.com/groups/global/AllUsers";
@@ -72,7 +73,7 @@ impl VodManager for S3VodManager {
         super::VodManagerType::S3
     }
 
-    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<String, SquadOvError> {
+    async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {
         Ok(
             if !self.cdn.private_cdn_domain.is_empty() {
                 // We need to manually sign the CloudFront URL here using the trusted private key
@@ -82,7 +83,10 @@ impl VodManager for S3VodManager {
                     fname=segment.get_fname(),
                 );
 
-                (*self.aws).as_ref().unwrap().sign_cloudfront_url(&base_url)?
+                (
+                    (*self.aws).as_ref().unwrap().sign_cloudfront_url(&base_url)?,
+                    Some(Utc::now() + chrono::Duration::seconds(43200))
+                )
             } else {
                 let req = GetObjectRequest{
                     bucket: self.bucket.clone(),
@@ -93,9 +97,12 @@ impl VodManager for S3VodManager {
                 let creds = self.client().provider.credentials().await?;
                 let region = self.client().region.clone();
 
-                req.get_presigned_url(&region, &creds, &PreSignedRequestOption{
-                    expires_in: std::time::Duration::from_secs(43200)
-                })
+                (
+                    req.get_presigned_url(&region, &creds, &PreSignedRequestOption{
+                        expires_in: std::time::Duration::from_secs(43200)
+                    }),
+                    Some(Utc::now() + chrono::Duration::seconds(43200))
+                )
             }
         )
     }

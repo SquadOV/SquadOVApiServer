@@ -10,11 +10,12 @@ use squadov_common::{
 };
 use crate::api;
 use actix_web::{web, HttpResponse};
-use serde::{Deserialize};
+use serde::{Serialize, Deserialize};
 use std::default::Default;
 use uuid::Uuid;
 use std::sync::Arc;
 use std::collections::HashMap;
+use chrono::{DateTime, Utc};
 
 #[derive(Deserialize)]
 pub struct VodFindFromVideoUuid {
@@ -228,6 +229,7 @@ pub async fn get_vod_association_handler(data : web::Path<VodFindFromVideoUuid>,
 #[derive(Deserialize)]
 pub struct VodTrackQuery {
     pub md5: Option<i32>,
+    pub expiration: Option<i32>,
 }
 
 pub async fn get_vod_fastify_status_handler(data : web::Path<VodFindFromVideoUuid>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
@@ -238,18 +240,34 @@ pub async fn get_vod_track_segment_handler(data : web::Path<squadov_common::VodS
     let metadata = db::get_vod_metadata(&*app.pool, &data.video_uuid, "source").await?;
     let manager = app.get_vod_manager(&metadata.bucket).await?;
 
-    let response_string = if let Some(_md5) = query.md5 {
-        manager.get_vod_md5(&data).await?
+    let (response_string, expiration) = if let Some(_md5) = query.md5 {
+        (manager.get_vod_md5(&data).await?, None)
     } else if data.segment_name != "preview.mp4" && db::check_if_vod_public(&*app.pool, &data.video_uuid).await? && manager.check_vod_segment_is_public(&data).await? {
         // If the VOD is public (shared), then we can return the public URL instead of the signed private one.
-        manager.get_public_segment_redirect_uri(&data).await?
+        (manager.get_public_segment_redirect_uri(&data).await?, None)
     } else {
         manager.get_segment_redirect_uri(&data).await?
     };
 
-    // You may be tempted to make this into a TemporaryRedirect and point
-    // a media player (e.g. VideoJS) to load from this directly. Don't do that
-    // unless you can figure out how to also pass the user's session ID along
-    // with that request since this is a protected endpoint.
-    Ok(HttpResponse::Ok().json(&response_string))
+
+    Ok(
+        if let Some(_exp) = query.expiration {
+            #[derive(Serialize)]
+            pub struct Response {
+                url: String,
+                expiration: Option<DateTime<Utc>>,
+            }
+
+            HttpResponse::Ok().json(&Response{
+                url: response_string,
+                expiration,
+            })
+        } else {
+            // You may be tempted to make this into a TemporaryRedirect and point
+            // a media player (e.g. VideoJS) to load from this directly. Don't do that
+            // unless you can figure out how to also pass the user's session ID along
+            // with that request since this is a protected endpoint.
+            HttpResponse::Ok().json(&response_string)
+        }
+    )
 }
