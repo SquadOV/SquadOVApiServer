@@ -15,6 +15,7 @@ use squadov_common::{
     WowInstance,
     WowInstanceData,
     WowInstanceType,
+    WowBossStatus,
     matches::MatchPlayerPair,
     generate_combatants_key,
     generate_combatants_hashed_array,
@@ -32,6 +33,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use serde_qs::actix::QsQuery;
 use std::convert::TryFrom;
+use itertools::izip;
 
 #[derive(Deserialize)]
 pub struct GenericMatchCreationRequest<T> {
@@ -262,10 +264,10 @@ impl api::ApiApplication {
         let (match_uuids, user_ids) = self.filter_valid_wow_match_player_pairs(uuids).await?;
 
         Ok(
-            sqlx::query_as!(
-                WoWEncounter,
+            sqlx::query!(
                 r#"
-                SELECT * FROM (
+                SELECT *
+                FROM (
                     SELECT DISTINCT ON (wmv.match_uuid, u.uuid)
                         wmv.match_uuid AS "match_uuid!",
                         wmv.start_tm AS "tm!",
@@ -278,7 +280,11 @@ impl api::ApiApplication {
                         wav.difficulty,
                         wav.num_players,
                         wav.instance_id,
-                        COALESCE(wav.success, FALSE) AS "success!"
+                        COALESCE(wav.success, FALSE) AS "success!",
+                        ARRAY_AGG(web.name) AS "boss_names!",
+                        ARRAY_AGG(web.npc_id) AS "boss_ids!",
+                        ARRAY_AGG(wcp.current_hp) AS "boss_hps!: Vec<Option<i64>>",
+                        ARRAY_AGG(wcp.max_hp) AS "boss_max_hps!: Vec<Option<i64>>"
                     FROM UNNEST($1::UUID[], $2::BIGINT[]) AS inp(match_uuid, user_id)
                     INNER JOIN squadov.wow_match_view AS wmv
                         ON wmv.match_uuid = inp.match_uuid
@@ -289,6 +295,24 @@ impl api::ApiApplication {
                         ON wav.view_id = wmv.id
                     INNER JOIN squadov.users AS u
                         ON u.id = wmv.user_id
+                    LEFT JOIN squadov.wow_encounter_bosses AS web
+                        ON web.encounter_id = wav.encounter_id
+                    LEFT JOIN squadov.wow_match_view_character_presence AS wcp
+                        ON wcp.view_id = wmv.id
+                            AND wcp.creature_id = web.npc_id
+                    GROUP BY
+                        wmv.match_uuid,
+                        wmv.start_tm,
+                        wmv.end_tm,
+                        wmv.build_version,
+                        u.uuid,
+                        wa.combatants_key,
+                        wav.encounter_id,
+                        wav.encounter_name,
+                        wav.difficulty,
+                        wav.num_players,
+                        wav.instance_id,
+                        wav.success
                     ORDER BY wmv.match_uuid, u.uuid
                 ) AS t
                 ORDER BY finish_time DESC
@@ -298,6 +322,32 @@ impl api::ApiApplication {
             )
                 .fetch_all(&*self.heavy_pool)
                 .await?
+                .into_iter()
+                .map(|x| {
+                    WoWEncounter {
+                        match_uuid: x.match_uuid,
+                        tm: x.tm,
+                        combatants_key: x.combatants_key,
+                        encounter_id: x.encounter_id,
+                        encounter_name: x.encounter_name,
+                        difficulty: x.difficulty,
+                        num_players: x.num_players,
+                        instance_id: x.instance_id,
+                        finish_time: x.finish_time,
+                        success: x.success,
+                        user_uuid: x.user_uuid,
+                        build: x.build,
+                        boss: izip!(x.boss_names, x.boss_ids, x.boss_hps, x.boss_max_hps).map(|(name, id, hp, max)|{
+                            WowBossStatus{
+                                name,
+                                npc_id: id,
+                                current_hp: hp,
+                                max_hp: max,
+                            }
+                        }).collect::<Vec<WowBossStatus>>(),
+                    }
+                })
+                .collect::<Vec<WoWEncounter>>()
         )
     }
 

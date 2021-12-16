@@ -11,12 +11,14 @@ use crate::{
         FlatValorantMatchDamageDto,
         FlatValorantMatchEconomyDto,
         FlatValorantMatchPlayerRoundStatsDto,
+        ValorantMatchFilterEvents,
     },
     matches
 };
-use sqlx::{Transaction, Postgres};
+use sqlx::{Transaction, Postgres, Executor};
 use uuid::Uuid;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 async fn link_match_uuid_to_valorant_match_id(ex: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, match_id: &str) -> Result<(), SquadOvError> {
     sqlx::query!(
@@ -511,6 +513,173 @@ pub async fn store_valorant_match_dto(ex: &mut Transaction<'_, Postgres>, match_
     store_valorant_match_team_dto(ex, match_uuid,&valorant_match.teams).await?;
     store_valorant_match_player_dto(ex, match_uuid, &valorant_match.players).await?;
     store_valorant_match_round_result_dto(ex, match_uuid, &valorant_match.round_results).await?;
+    Ok(())
+}
+
+async fn get_agent_list_for_players_on_team<'a, T>(ex: T, match_uuid: &Uuid, team: Option<&String>) -> Result<Vec<String>, SquadOvError>
+where
+    T: Executor<'a, Database = Postgres>
+{
+    Ok(
+        sqlx::query!(
+            "
+            SELECT character_id
+            FROM squadov.valorant_match_players
+            WHERE match_uuid = $1
+                AND ($2::VARCHAR IS NULL OR team_id = $2)
+            ",
+            match_uuid,
+            team,
+        )
+            .fetch_all(ex)
+            .await?
+            .into_iter()
+            .map(|x| {
+                x.character_id
+            })
+            .collect::<Vec<String>>()
+    )
+}
+
+pub async fn cache_valorant_match_information(ex: &mut Transaction<'_, Postgres>, match_uuid: &Uuid) -> Result<(), SquadOvError> {
+    // We need to get which agents are on what team and create a regex-searchable string representation.
+    // Note that in the case where we're playing deathmatch where there's no teams (and everyone's team id is equivalent to their puuid),
+    // then we will dump everyone into "team 0".
+    let teams = sqlx::query!(
+        "
+        SELECT DISTINCT team_id
+        FROM squadov.valorant_match_players
+        WHERE match_uuid = $1
+        ",
+        match_uuid
+    )
+        .fetch_all(&mut *ex)
+        .await?
+        .into_iter()
+        .map(|x| {
+            x.team_id
+        })
+        .collect::<Vec<String>>();
+
+    let t0_agents: String;
+    let t1_agents: String;
+    if teams.len() == 2 {
+        t0_agents =  format!(",{},", get_agent_list_for_players_on_team(&mut *ex, match_uuid, teams.get(0)).await?.join(","));
+        t1_agents = format!(",{},", get_agent_list_for_players_on_team(&mut *ex, match_uuid, teams.get(1)).await?.join(","));
+    } else {
+        t0_agents = format!(",{},", get_agent_list_for_players_on_team(&mut *ex, match_uuid, None).await?.join(","));
+        t1_agents = String::new();
+    }
+
+    sqlx::query!(
+        "
+        INSERT INTO squadov.valorant_match_computed_data (
+            match_uuid,
+            t0_agents,
+            t1_agents
+        ) VALUES (
+            $1,
+            $2,
+            $3
+        ) ON CONFLICT (match_uuid) DO UPDATE SET
+            t0_agents = EXCLUDED.t0_agents,
+            t1_agents = EXCLUDED.t1_agents
+        ",
+        match_uuid,
+        &t0_agents,
+        &t1_agents,
+    )
+        .execute(ex)
+        .await?;
+    Ok(())
+}
+
+pub async fn cache_valorant_player_pov_information(ex: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, user_id: i64) -> Result<(), SquadOvError> {
+    let cached_data = sqlx::query!(
+        "
+        SELECT
+            vmp.character_id,
+            vmp.competitive_tier,
+            vmt.won
+        FROM squadov.valorant_match_players AS vmp
+        INNER JOIN squadov.riot_account_links AS ral
+            ON ral.puuid = vmp.puuid
+        INNER JOIN squadov.valorant_match_teams AS vmt
+            ON vmt.team_id = vmp.team_id
+        WHERE vmp.match_uuid = $1
+            AND ral.user_id = $2
+        ",
+        match_uuid,
+        user_id,
+    )
+        .fetch_one(&mut *ex)
+        .await?;
+
+    let cached_per_round_data = sqlx::query!(
+        r#"
+        SELECT
+            vmk.round_num,
+            COUNT(vmk.victim_puuid) AS "kills!"
+        FROM squadov.valorant_match_players AS vmp
+        INNER JOIN squadov.riot_account_links AS ral
+            ON ral.puuid = vmp.puuid
+        LEFT JOIN squadov.valorant_match_kill AS vmk
+            ON vmk.match_uuid = vmp.match_uuid
+                AND vmk.killer_puuid = vmp.puuid
+        WHERE vmp.match_uuid = $1
+            AND ral.user_id = $2
+        GROUP BY vmk.round_num
+        "#,
+        match_uuid,
+        user_id
+    )
+        .fetch_all(&mut *ex)
+        .await?;
+
+    let mut events: HashSet<ValorantMatchFilterEvents> = HashSet::new();
+    for round in cached_per_round_data {
+        if round.kills >= 5 {
+            events.insert(ValorantMatchFilterEvents::PentaKill);
+        } else if round.kills >= 4 {
+            events.insert(ValorantMatchFilterEvents::QuadraKill);
+        } else if round.kills >= 3 {
+            events.insert(ValorantMatchFilterEvents::TripleKill);
+        } else if round.kills >= 2 {
+            events.insert(ValorantMatchFilterEvents::DoubleKill);
+        }
+    }
+
+    sqlx::query!(
+        "
+        INSERT INTO squadov.valorant_match_pov_computed_data (
+            match_uuid,
+            user_id,
+            pov_agent,
+            rank,
+            key_events,
+            winner
+        ) VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6
+        ) ON CONFLICT (match_uuid, user_id) DO UPDATE SET
+            pov_agent = EXCLUDED.pov_agent,
+            rank = EXCLUDED.rank,
+            key_events = EXCLUDED.key_events,
+            winner = EXCLUDED.winner
+        ",
+        match_uuid,
+        user_id,
+        &cached_data.character_id,
+        &cached_data.competitive_tier,
+        &events.into_iter().map(|x| { x as i32 }).collect::<Vec<i32>>(),
+        &cached_data.won,
+    )
+        .execute(&mut *ex)
+        .await?;
     Ok(())
 }
 

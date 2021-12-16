@@ -15,13 +15,11 @@ use squadov_common::{
         MatchVideoShareConnection,
         MatchVideoSharePermissions,
     },
-    user::SquadOVUser,
     VodAssociation,
 };
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
-use std::convert::TryFrom;
 use sqlx::{Transaction, Postgres};
 
 #[derive(Deserialize)]
@@ -47,33 +45,13 @@ impl api::ApiApplication {
     // This function takes care of the things the old fn_trigger_auto_share database trigger used to do.
     // We had to move it out into code since it was getting a built unwieldy and we need to start doing more
     // complex checks for sharing.
-    pub async fn handle_vod_share(&self, tx : &mut Transaction<'_, Postgres>, user: &SquadOVUser, vod: &VodAssociation) -> Result<(), SquadOvError> {
+    pub async fn handle_vod_share(&self, tx : &mut Transaction<'_, Postgres>, user_id: i64, vod: &VodAssociation) -> Result<(), SquadOvError> {
         if let Some(match_uuid) = vod.match_uuid.as_ref() {
-            let db_match_uuid = if vod.is_clip {
-                None
-            } else {
-                Some(match_uuid.clone())
-            };
-
             // Now we need grab some details about the match, the user's sharing settings, and the user's squads sharing settings so we know how to share things properly.
             // 1) Get all the auto-sharing settings the user has that matches the game being played.
             //    This will get us information on which users and/or squads to continue to share to.
-            let auto_connections = share::auto::get_auto_share_connections_for_user(&mut *tx, user.id).await?;
-            let game = sqlx::query!(
-                "
-                SELECT game
-                FROM squadov.matches
-                WHERE uuid = $1
-                ",
-                match_uuid
-            )
-                .fetch_one(&mut *tx)
-                .await?
-                .game
-                .map(|x| {
-                    SquadOvGames::try_from(x).unwrap_or(SquadOvGames::Unknown)
-                })
-                .unwrap_or(SquadOvGames::Unknown);
+            let auto_connections = share::auto::get_auto_share_connections_for_user(&mut *tx, user_id).await?;
+            let game = self.get_game_for_match(match_uuid).await?;
 
             // Doing the safe thing here and explicitly checking for unknown.
             // I'm a little worried that somewhere contains a thing that'll demonstrate
@@ -86,144 +64,29 @@ impl api::ApiApplication {
             //      a) This isn't a core inner loop so the slowness should be OK.
             //      b) A user won't be in a bajillion squads that'd make this significantly slow.
             // Chances are this is going to change in the future. :)
-
             for conn in &auto_connections {
                 if !conn.games.contains(&game) {
                     continue;
                 }
 
-                // 2) Check that user/squad being shared with will accept this user's VOD.
-                if let Some(squad_id) = conn.dest_squad_id {
-                    let settings = self.get_squad_sharing_settings(squad_id).await?;
-
-                    if settings.disabled_games.contains(&game) {
-                        continue;
-                    }
-
-                    if game == SquadOvGames::WorldOfWarcraft {
-                        // Easiest to do a database check here using the parameters we found in the squad sharing settings rather than pulling in a
-                        // bunch of information about the different possible types of wow match views and doing the check here on the server.
-                        let prevent_sharing = sqlx::query!(
-                            r#"
-                            SELECT (($3::BOOLEAN AND wev.view_id IS NOT NULL) 
-                                OR ($4::BOOLEAN AND (wiv.view_id IS NOT NULL AND wiv.instance_type = 1))
-                                OR ($5::BOOLEAN AND wcv.view_id IS NOT NULL)
-                                OR ($6::BOOLEAN AND 
-                                    (
-                                        wav.view_id IS NOT NULL
-                                            OR (
-                                                wiv.view_id IS NOT NULL AND wiv.instance_type = 4
-                                            )
-                                    )
-                                )
-                                OR ($7::BOOLEAN AND (wiv.view_id IS NOT NULL AND wiv.instance_type = 3))
-                            ) AS "value!"
-                            FROM squadov.wow_match_view AS wmv
-                            LEFT JOIN squadov.wow_encounter_view AS wev
-                                ON wev.view_id = wmv.id
-                            LEFT JOIN squadov.wow_challenge_view AS wcv
-                                ON wcv.view_id = wmv.id
-                            LEFT JOIN squadov.wow_arena_view AS wav
-                                ON wav.view_id = wmv.id
-                            LEFT JOIN squadov.wow_instance_view AS wiv
-                                ON wiv.view_id = wmv.id
-                            WHERE wmv.match_uuid = $1
-                                AND wmv.user_id = $2
-                            "#,
-                            &match_uuid,
-                            user.id,
-                            settings.wow.disable_encounters,
-                            settings.wow.disable_dungeons,
-                            settings.wow.disable_keystones,
-                            settings.wow.disable_arenas,
-                            settings.wow.disable_bgs,
-                        )
-                            .fetch_one(&mut *tx)
-                            .await?
-                            .value;
-                        
-                        if prevent_sharing {
-                            continue;
-                        }
-                    }
-
-                    // At this point we also need to check the blacklist. If the user is blacklisted they are not allowed to
-                    // share VODs with the squad even if they leave and rejoin.
-                    let is_on_blacklist = sqlx::query!(
-                        r#"
-                        SELECT EXISTS (
-                            SELECT 1
-                            FROM squadov.squad_user_share_blacklist
-                            WHERE squad_id = $1 AND user_id = $2
-                        ) AS "exists!"
-                        "#,
-                        squad_id,
-                        user.id,
-                    )
-                        .fetch_one(&mut *tx)
-                        .await?
-                        .exists;
-
-                    if is_on_blacklist {
-                        continue;
-                    }
-                }
-
                 // 3) Share with the user/squad in question.
                 // Should this actually error out if something failed?
                 if conn.dest_squad_id.is_none() && conn.dest_user_id.is_none() {
-                    sqlx::query!(
-                        "
-                        INSERT INTO squadov.user_profile_vods (
-                            user_id,
-                            video_uuid
-                        ) VALUES (
-                            $1,
-                            $2
-                        )
-                        ON CONFLICT DO NOTHING
-                        ",
-                        user.id,
-                        &vod.video_uuid,
-                    )
-                        .execute(&mut *tx)
-                        .await?;
-                } else {
-                    sqlx::query!(
-                        "
-                        INSERT INTO squadov.share_match_vod_connections (
-                            match_uuid,
-                            video_uuid,
-                            source_user_id,
-                            dest_user_id,
-                            dest_squad_id,
-                            can_share,
-                            can_clip,
-                            parent_connection_id,
-                            share_depth
-                        ) VALUES (
-                            $1,
-                            $2,
-                            $3,
-                            $4,
-                            $5,
-                            $6,
-                            $7,
-                            NULL,
-                            0
-                        )
-                        ON CONFLICT DO NOTHING
-                        ",
-                        db_match_uuid,
-                        &vod.video_uuid,
-                        user.id,
-                        conn.dest_user_id,
-                        conn.dest_squad_id,
-                        conn.can_share,
-                        conn.can_clip,
-                    )
-                        .execute(&mut *tx)
-                        .await?;
+                    self.sharing_itf.handle_vod_share_to_profile(&mut *tx, user_id, vod).await?;
+                } else if let Some(squad_id) = conn.dest_squad_id {
+                    self.sharing_itf.handle_vod_share_to_squad(&mut *tx, user_id, match_uuid, game, squad_id, &MatchVideoShareConnection{
+                        can_share: conn.can_share,
+                        can_clip: conn.can_clip,
+                        id: -1,
+                        match_uuid: if vod.is_clip {
+                            None
+                        } else {
+                            vod.match_uuid.clone()
+                        },
+                        video_uuid: Some(vod.video_uuid.clone()),
+                        dest_user_id: None,
+                        dest_squad_id: Some(squad_id),
+                    }, None).await?;
                 }
             }
         }
@@ -339,17 +202,39 @@ pub async fn create_new_share_connection_handler(app : web::Data<Arc<api::ApiApp
         }).collect()
     };
 
+
     let mut ret_conns: Vec<MatchVideoShareConnection> = vec![];
     let mut tx = app.pool.begin().await?;
 
     for new_conn in pending_conns {
-        ret_conns.push(share::create_new_share_connection(&mut tx, &new_conn, session.user.id, app.find_shareable_parent_connection_for_match_video_for_user(
-            new_conn.match_uuid.as_ref(),
-            new_conn.video_uuid.as_ref(),
-            session.user.id,
-            session.user.uuid.clone(),
-            data.game.as_ref(),
-        ).await?).await?);
+        // We currently only support squad sharing.
+        if let Some(squad_id) = &new_conn.dest_squad_id {
+            if let Some(added) = app.sharing_itf.handle_vod_share_to_squad(
+                &mut tx,
+                session.user.id,
+                // The incoming connection will probably have a video uuid but won't necessarily have a match uuid (e.g. for clips).
+                // Thus we have to query the database for more information about the VOD and get the match UUID properly so that
+                // we can do proper game data filtering when doing the sharing. In the case where no video uuid exists, then the
+                // match uuid must exist since in that case we're just sharing a match with no VODs.
+                &if let Some(video_uuid) = new_conn.video_uuid.as_ref() {
+                    app.get_vod_match_uuid(video_uuid).await?.ok_or(SquadOvError::BadRequest)?
+                } else {
+                    new_conn.match_uuid.ok_or(SquadOvError::BadRequest)?
+                },
+                data.game.clone().unwrap_or(SquadOvGames::Unknown),
+                *squad_id,
+                &new_conn,
+                app.find_shareable_parent_connection_for_match_video_for_user(
+                    new_conn.match_uuid.as_ref(),
+                    new_conn.video_uuid.as_ref(),
+                    session.user.id,
+                    session.user.uuid.clone(),
+                    data.game.as_ref(),
+                ).await?
+            ).await? {
+                ret_conns.push(added);
+            }
+        }
     }
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(ret_conns))

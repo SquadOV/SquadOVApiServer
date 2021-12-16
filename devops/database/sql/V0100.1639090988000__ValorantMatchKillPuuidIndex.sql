@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY ON valorant_match_kill(match_uuid, killer_puuid);

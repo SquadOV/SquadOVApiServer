@@ -52,6 +52,7 @@ harsh = "0.2.1"
 hmac = "0.11.0"
 petname = { path="../deps/cargo/rust-petname", version = "1.1.0" }
 convert_case = "0.4.0"
+itertools = "0.10.3"
 
 [[bin]]
 name = "squadov_api_server"

@@ -9,7 +9,7 @@ def extract_instances(dataFolder, outputFolder):
     with open(os.path.join(dataFolder, 'map.csv')) as classes:
         reader = csv.DictReader(classes)
         for row in reader:
-            if row['InstanceType'] != '1' and row['InstanceType'] != '2' and row['InstanceType'] != '3':
+            if row['InstanceType'] != '1' and row['InstanceType'] != '2' and row['InstanceType'] != '3' and row['InstanceType'] != '4' and row['InstanceType'] != '5':
                 continue
 
             allData.append({

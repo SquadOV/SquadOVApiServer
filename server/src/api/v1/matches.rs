@@ -12,11 +12,14 @@ use squadov_common::{
     games,
     matches::{RecentMatch, BaseRecentMatch, MatchPlayerPair},
     aimlab::AimlabTask,
-    riot::db as riot_db,
-    riot::games::{
-        LolPlayerMatchSummary,
-        TftPlayerMatchSummary,
-        ValorantPlayerMatchSummary,
+    riot::{
+        db as riot_db,
+        games::{
+            LolPlayerMatchSummary,
+            TftPlayerMatchSummary,
+            ValorantPlayerMatchSummary,
+        },
+        ValorantMatchFilters,
     },
     wow::{
         WoWEncounter,
@@ -119,12 +122,14 @@ impl Default for GenericWowQuery {
 #[serde(rename_all="camelCase")]
 pub struct RecentMatchGameQuery {
     pub wow: GenericWowQuery,
+    pub valorant: ValorantMatchFilters,
 }
 
 impl Default for RecentMatchGameQuery {
     fn default() -> Self {
         Self {
             wow: GenericWowQuery::default(),
+            valorant: ValorantMatchFilters::default(),
         }
     }
 }
@@ -209,6 +214,26 @@ pub struct RecentMatchHandle {
 }
 
 impl api::ApiApplication {
+
+    pub async fn get_game_for_match(&self, match_uuid: &Uuid) -> Result<SquadOvGames, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                "
+                SELECT game
+                FROM squadov.matches
+                WHERE uuid = $1
+                ",
+                match_uuid
+            )
+                .fetch_one(&*self.pool)
+                .await?
+                .game
+                .map(|x| {
+                    SquadOvGames::try_from(x).unwrap_or(SquadOvGames::Unknown)
+                })
+                .unwrap_or(SquadOvGames::Unknown)
+        )
+    }
 
     pub async fn get_recent_base_matches(&self, handles: &[RecentMatchHandle], user_id: i64) -> Result<Vec<RawRecentMatchData>, SquadOvError> {
         let match_uuids: Vec<Uuid> = handles.iter().map(|x| { x.match_uuid.clone() }).collect();
@@ -302,10 +327,10 @@ impl api::ApiApplication {
                 FROM squadov.view_share_connections_access_users AS vi
                 INNER JOIN squadov.vods AS v
                     ON v.video_uuid = vi.video_uuid
-                LEFT JOIN squadov.squad_role_assignments AS sra
-                    ON sra.user_id = vi.source_user_id
+                INNER JOIN squadov.share_match_vod_connections AS mvc
+		            ON mvc.id = vi.id
                 WHERE vi.user_id = $1
-                    AND (CARDINALITY($5::BIGINT[]) = 0 OR sra.squad_id = ANY($5))
+                    AND (CARDINALITY($5::BIGINT[]) = 0 OR mvc.dest_squad_id = ANY($5))
                     AND v.match_uuid IS NOT NULL
                     AND v.user_uuid IS NOT NULL
                     AND v.start_time IS NOT NULL
@@ -339,8 +364,15 @@ impl api::ApiApplication {
                 ON wav.view_id = wmv.id
             LEFT JOIN squadov.wow_instance_view AS wiv
                 ON wiv.view_id = wmv.id
+            LEFT JOIN squadov.valorant_matches AS vm
+                ON vm.match_uuid = m.uuid
             LEFT JOIN squadov.view_vod_tags AS vvt
                 ON v.video_uuid = vvt.video_uuid
+            LEFT JOIN squadov.valorant_match_computed_data AS mcd
+                ON mcd.match_uuid = vm.match_uuid
+            LEFT JOIN squadov.valorant_match_pov_computed_data AS pcd
+                ON pcd.match_uuid = vm.match_uuid
+                    AND pcd.user_id = u.id
             WHERE u.id = $1
                 AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                 AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
@@ -395,6 +427,25 @@ impl api::ApiApplication {
                         AND (CARDINALITY($39::INTEGER[]) = 0 OR wiv.instance_type = ANY($39))
                         AND (CARDINALITY($40::INTEGER[]) = 0 OR wiv.instance_id = ANY($40))
                 ))
+                AND (
+                    vm.match_uuid IS NULL OR (
+                        (NOT $41::BOOLEAN OR vm.is_ranked)
+                            AND (CARDINALITY($42::VARCHAR[]) = 0 OR vm.map_id = ANY($42))
+                            AND (CARDINALITY($43::VARCHAR[]) = 0 OR vm.game_mode = ANY($43))
+                            AND (CARDINALITY($44::VARCHAR[]) = 0 OR pcd.pov_agent = ANY($44))
+                            AND (NOT $45::BOOLEAN OR pcd.winner)
+                            AND ($46::INTEGER IS NULL OR pcd.rank >= $46)
+                            AND ($47::INTEGER IS NULL OR pcd.rank <= $47)
+                            AND (CARDINALITY($48::INTEGER[]) = 0 OR pcd.key_events && $48)
+                            AND (
+                                (mcd.t0_agents IS NULL AND mcd.t1_agents IS NULL)
+                                OR
+                                (mcd.t0_agents ~ $49 AND mcd.t1_agents ~ $50)
+                                OR
+                                (mcd.t0_agents ~ $50 AND mcd.t1_agents ~ $49)
+                            )
+                    )
+                )
             GROUP BY v.match_uuid, v.user_uuid, v.end_time
             HAVING CARDINALITY($37::VARCHAR[]) = 0 OR ARRAY_AGG(vvt.tag) @> $37::VARCHAR[]
             ORDER BY v.end_time DESC
@@ -452,6 +503,17 @@ impl api::ApiApplication {
             &filter.filters.wow.instances.enabled,
             &filter.filters.wow.instances.instance_types.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
             &filter.filters.wow.instances.all_instance_ids(),
+            // Valorant
+            filter.filters.valorant.is_ranked,
+            &filter.filters.valorant.maps.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            &filter.filters.valorant.modes.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone() }).collect::<Vec<String>>(),
+            &filter.filters.valorant.agent_povs.as_ref().unwrap_or(&vec![]).iter().map(|x| { x.clone().to_lowercase() }).collect::<Vec<String>>(),
+            filter.filters.valorant.is_winner.unwrap_or(false),
+            filter.filters.valorant.rank_low,
+            filter.filters.valorant.rank_high,
+            &filter.filters.valorant.pov_events.as_ref().unwrap_or(&vec![]).iter().map(|x| { *x as i32 }).collect::<Vec<i32>>(),
+            &filter.filters.valorant.build_friendly_composition_filter()?,
+            &filter.filters.valorant.build_enemy_composition_filter()?,
         )
             .fetch_all(&*self.heavy_pool)
             .await?

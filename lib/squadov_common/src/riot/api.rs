@@ -11,12 +11,14 @@ use std::sync::Arc;
 use crate::{
     SquadOvError,
     rabbitmq::{RabbitMqInterface, RabbitMqListener, RabbitMqConfig},
+    riot::db,
 };
 use sqlx::postgres::{PgPool};
 use reqwest::header;
 use tokio::sync::{Semaphore};
 use reqwest::{StatusCode, Response};
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 #[derive(Deserialize,Debug,Clone)]
 pub struct ApiKeyLimit {
@@ -84,6 +86,13 @@ pub enum RiotApiTask {
     ValorantMatch{
         match_id: String,
         shard: String,
+    },
+    ValorantMatchCacheData{
+        match_uuid: Uuid,
+    },
+    ValorantMatchPlayerCacheData{
+        match_uuid: Uuid,
+        user_id: i64,
     }
 }
 
@@ -244,6 +253,20 @@ impl RabbitMqListener for RiotApiApplicationInterface {
                     SquadOvError::NotFound => return Err(SquadOvError::Defer(60 * 1000)),
                     _ => return Err(err)
                 }
+            },
+            RiotApiTask::ValorantMatchCacheData{match_uuid} => {
+                let mut tx = self.db.begin().await?;
+                db::cache_valorant_match_information(&mut tx, &match_uuid).await?;
+                let match_user_ids = db::get_squadov_user_ids_in_valorant_match(&mut tx, &match_uuid).await?;
+                for user_id in match_user_ids {
+                    db::cache_valorant_player_pov_information(&mut tx, &match_uuid, user_id).await?;
+                }
+                tx.commit().await?;
+            },
+            RiotApiTask::ValorantMatchPlayerCacheData{match_uuid, user_id} => {
+                let mut tx = self.db.begin().await?;
+                db::cache_valorant_player_pov_information(&mut tx, &match_uuid, user_id).await?;
+                tx.commit().await?;
             },
         };
         Ok(())
