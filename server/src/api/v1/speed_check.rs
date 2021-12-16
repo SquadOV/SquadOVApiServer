@@ -20,6 +20,7 @@ pub struct SpeedCheckFromUuid {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all="camelCase")]
 pub struct SpeedCheckData {
     speed_mbps: f64,
 }
