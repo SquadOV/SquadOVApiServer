@@ -57,6 +57,7 @@ pub struct WoWEncounter {
     pub user_uuid: Uuid,
     pub build: String,
     pub boss: Vec<WowBossStatus>,
+    pub pull_number: Option<i64>,
 }
 
 #[derive(Deserialize)]

@@ -16,7 +16,10 @@ use squadov_common::{
     WowInstanceData,
     WowInstanceType,
     WowBossStatus,
-    matches::MatchPlayerPair,
+    matches::{
+        self,
+        MatchPlayerPair,
+    },
     generate_combatants_key,
     generate_combatants_hashed_array,
 };
@@ -40,6 +43,7 @@ pub struct GenericMatchCreationRequest<T> {
     pub timestamp: DateTime<Utc>,
     pub data: T,
     pub cl: WoWCombatLogState,
+    pub session: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -284,7 +288,8 @@ impl api::ApiApplication {
                         ARRAY_AGG(web.name) AS "boss_names!",
                         ARRAY_AGG(web.npc_id) AS "boss_ids!",
                         ARRAY_AGG(wcp.current_hp) AS "boss_hps!: Vec<Option<i64>>",
-                        ARRAY_AGG(wcp.max_hp) AS "boss_max_hps!: Vec<Option<i64>>"
+                        ARRAY_AGG(wcp.max_hp) AS "boss_max_hps!: Vec<Option<i64>>",
+                        MAX(mmc.match_order) AS "pull_number"
                     FROM UNNEST($1::UUID[], $2::BIGINT[]) AS inp(match_uuid, user_id)
                     INNER JOIN squadov.wow_match_view AS wmv
                         ON wmv.match_uuid = inp.match_uuid
@@ -300,6 +305,8 @@ impl api::ApiApplication {
                     LEFT JOIN squadov.wow_match_view_character_presence AS wcp
                         ON wcp.view_id = wmv.id
                             AND wcp.creature_id = web.npc_id
+                    LEFT JOIN squadov.match_to_match_collection AS mmc
+                        ON mmc.match_uuid = inp.match_uuid
                     GROUP BY
                         wmv.match_uuid,
                         wmv.start_tm,
@@ -345,6 +352,7 @@ impl api::ApiApplication {
                                 max_hp: max,
                             }
                         }).collect::<Vec<WowBossStatus>>(),
+                        pull_number: x.pull_number,
                     }
                 })
                 .collect::<Vec<WoWEncounter>>()
@@ -793,7 +801,7 @@ impl api::ApiApplication {
         )
     }
 
-    async fn create_generic_wow_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
+    async fn create_generic_wow_match_view<T>(&self, tx: &mut Transaction<'_, Postgres>, data: &GenericMatchCreationRequest<T>, user_id: i64) -> Result<Uuid, SquadOvError> {
         Ok(
             sqlx::query!(
                 r#"
@@ -803,7 +811,8 @@ impl api::ApiApplication {
                     start_tm,
                     combat_log_version,
                     advanced_log,
-                    build_version
+                    build_version,
+                    session_id
                 )
                 VALUES (
                     gen_random_uuid(),
@@ -811,15 +820,17 @@ impl api::ApiApplication {
                     $2,
                     $3,
                     $4,
-                    $5
+                    $5,
+                    $6
                 )
                 RETURNING id
                 "#,
                 user_id,
-                tm,
-                &cl.combat_log_version,
-                cl.advanced_log,
-                &cl.build_version,
+                &data.timestamp,
+                &data.cl.combat_log_version,
+                data.cl.advanced_log,
+                &data.cl.build_version,
+                data.session,
             )
                 .fetch_one(tx)
                 .await?
@@ -827,8 +838,8 @@ impl api::ApiApplication {
         )
     }
 
-    pub async fn create_wow_encounter_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, game: &WoWEncounterStart, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
-        let uuid = self.create_generic_wow_match_view(&mut *tx, tm, user_id, cl).await?;
+    pub async fn create_wow_encounter_match_view(&self, tx: &mut Transaction<'_, Postgres>, data: &GenericMatchCreationRequest<WoWEncounterStart>, user_id: i64) -> Result<Uuid, SquadOvError> {
+        let uuid = self.create_generic_wow_match_view(&mut *tx, &data, user_id).await?;
         sqlx::query!(
             "
             INSERT INTO squadov.wow_encounter_view (
@@ -849,11 +860,11 @@ impl api::ApiApplication {
             )
             ",
             &uuid,
-            game.encounter_id,
-            &game.encounter_name,
-            game.difficulty,
-            game.num_players,
-            game.instance_id,
+            data.data.encounter_id,
+            &data.data.encounter_name,
+            data.data.difficulty,
+            data.data.num_players,
+            data.data.instance_id,
         )
             .execute(&mut *tx)
             .await?;
@@ -958,8 +969,8 @@ impl api::ApiApplication {
         Ok(())
     }
 
-    pub async fn create_wow_challenge_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, game: &WoWChallengeStart, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
-        let uuid = self.create_generic_wow_match_view(&mut *tx, tm, user_id, cl).await?;
+    pub async fn create_wow_challenge_match_view(&self, tx: &mut Transaction<'_, Postgres>, data: &GenericMatchCreationRequest<WoWChallengeStart>, user_id: i64) -> Result<Uuid, SquadOvError> {
+        let uuid = self.create_generic_wow_match_view(&mut *tx, data, user_id).await?;
         sqlx::query!(
             "
             INSERT INTO squadov.wow_challenge_view (
@@ -976,9 +987,9 @@ impl api::ApiApplication {
             )
             ",
             &uuid,
-            &game.challenge_name,
-            game.instance_id,
-            game.keystone_level,
+            &data.data.challenge_name,
+            data.data.instance_id,
+            data.data.keystone_level,
         )
             .execute(&mut *tx)
             .await?;
@@ -1097,8 +1108,8 @@ impl api::ApiApplication {
         Ok(())
     }
 
-    pub async fn create_wow_arena_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, game: &WoWArenaStart, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
-        let uuid = self.create_generic_wow_match_view(&mut *tx, tm, user_id, cl).await?;
+    pub async fn create_wow_arena_match_view(&self, tx: &mut Transaction<'_, Postgres>, data: &GenericMatchCreationRequest<WoWArenaStart>, user_id: i64) -> Result<Uuid, SquadOvError> {
+        let uuid = self.create_generic_wow_match_view(&mut *tx, data, user_id).await?;
         sqlx::query!(
             "
             INSERT INTO squadov.wow_arena_view (
@@ -1113,8 +1124,8 @@ impl api::ApiApplication {
             )
             ",
             &uuid,
-            game.instance_id,
-            &game.arena_type
+            data.data.instance_id,
+            &data.data.arena_type
         )
             .execute(&mut *tx)
             .await?;
@@ -1219,8 +1230,8 @@ impl api::ApiApplication {
         Ok(())
     }
 
-    pub async fn create_wow_instance_match_view(&self, tx: &mut Transaction<'_, Postgres>, tm: &DateTime<Utc>, user_id: i64, game: &WowInstanceData, cl: &WoWCombatLogState) -> Result<Uuid, SquadOvError> {
-        let uuid = self.create_generic_wow_match_view(&mut *tx, tm, user_id, cl).await?;
+    pub async fn create_wow_instance_match_view(&self, tx: &mut Transaction<'_, Postgres>, data: &GenericMatchCreationRequest<WowInstanceData>, user_id: i64) -> Result<Uuid, SquadOvError> {
+        let uuid = self.create_generic_wow_match_view(&mut *tx, data, user_id).await?;
         sqlx::query!(
             "
             INSERT INTO squadov.wow_instance_view (
@@ -1237,9 +1248,9 @@ impl api::ApiApplication {
             )
             ",
             &uuid,
-            game.id as i64,
-            &game.name,
-            game.instance_type as i32,
+            data.data.id as i64,
+            &data.data.name,
+            data.data.instance_type as i32,
         )
             .execute(&mut *tx)
             .await?;
@@ -1430,6 +1441,81 @@ impl api::ApiApplication {
 
         Ok(())
     }
+
+    pub async fn group_wow_encounter_using_session(&self, tx: &mut Transaction<'_, Postgres>, view_uuid: &Uuid, match_uuid: &Uuid) -> Result<(), SquadOvError> {
+        // First, find the previous encounter match that has the same session, is the same encounter, and has the same people running it.        
+        let some_previous_match_uuid: Option<Uuid> = sqlx::query!(
+            "
+            WITH current AS (
+                SELECT *
+                FROM squadov.wow_match_view AS wmv
+                INNER JOIN squadov.new_wow_encounters AS nwe
+                    ON nwe.match_uuid = wmv.match_uuid
+                WHERE wmv.id = $1
+            )
+            SELECT nwe.match_uuid
+            FROM current
+            INNER JOIN squadov.wow_match_view AS wmv
+                ON wmv.user_id = current.user_id
+                    AND wmv.session_id = current.session_id
+            INNER JOIN squadov.new_wow_encounters AS nwe
+                ON nwe.match_uuid = wmv.match_uuid
+                    AND nwe.combatants_key = current.combatants_key
+                    AND nwe.encounter_id = current.encounter_id
+                    AND nwe.difficulty = current.difficulty
+                    AND nwe.instance_id = current.instance_id
+            WHERE wmv.id != current.id
+            ORDER BY wmv.end_tm DESC
+            LIMIT 1
+            ",
+            view_uuid,
+        )
+            .fetch_optional(&mut *tx)
+            .await?
+            .map(|x| {
+                x.match_uuid
+            });
+
+
+        let collection_uuid = if let Some(previous_match_uuid) = some_previous_match_uuid {
+            // The previous match should already be in a collection because the other branch of the parent if statement
+            // creates the collection if it's the first one in.
+            matches::get_match_collection_for_match(&mut *tx, &previous_match_uuid).await?
+        } else {
+            // This is the first pull presumably. Create a new collection that future pulls will be added to.
+            matches::create_new_match_collection(&mut *tx).await?        
+        };
+
+        matches::add_match_to_collection(&mut *tx, match_uuid, &collection_uuid).await?;
+        Ok(())
+    }
+
+    async fn list_ordered_wow_encounter_match_pulls(&self, match_uuid: &Uuid, user_id: i64) -> Result<Vec<Uuid>, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                "
+                SELECT mmc2.match_uuid
+                FROM squadov.match_to_match_collection AS mmc
+                INNER JOIN squadov.match_to_match_collection AS mmc2
+                    ON mmc2.collection_uuid = mmc.collection_uuid
+                INNER JOIN squadov.wow_match_view AS wmv
+                    ON wmv.match_uuid = mmc2.match_uuid
+                WHERE mmc.match_uuid = $1
+                    AND wmv.user_id = $2
+                ORDER BY wmv.end_tm ASC
+                ",
+                match_uuid,
+                user_id,
+            )
+                .fetch_all(&*self.pool)
+                .await?
+                .into_iter()
+                .map(|x| {
+                    x.match_uuid
+                })
+                .collect::<Vec<Uuid>>()
+        )
+    }
 }
 
 pub async fn create_wow_encounter_match_handler(app : web::Data<Arc<api::ApiApplication>>, input_match: web::Json<GenericMatchCreationRequest<WoWEncounterStart>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
@@ -1440,7 +1526,7 @@ pub async fn create_wow_encounter_match_handler(app : web::Data<Arc<api::ApiAppl
     };
 
     let mut tx = app.pool.begin().await?;
-    let uuid = app.create_wow_encounter_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    let uuid = app.create_wow_encounter_match_view(&mut tx, &input_match, session.user.id).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(uuid))
 }
@@ -1453,7 +1539,7 @@ pub async fn create_wow_challenge_match_handler(app : web::Data<Arc<api::ApiAppl
     };
 
     let mut tx = app.pool.begin().await?;
-    let uuid = app.create_wow_challenge_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    let uuid = app.create_wow_challenge_match_view(&mut tx, &input_match, session.user.id).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(uuid))
 }
@@ -1466,7 +1552,7 @@ pub async fn create_wow_arena_match_handler(app : web::Data<Arc<api::ApiApplicat
     };
 
     let mut tx = app.pool.begin().await?;
-    let uuid = app.create_wow_arena_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    let uuid = app.create_wow_arena_match_view(&mut tx, &input_match, session.user.id).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(uuid))
 }
@@ -1475,6 +1561,7 @@ pub async fn finish_wow_encounter_handler(app : web::Data<Arc<api::ApiApplicatio
     let combatants_key = generate_combatants_key(&data.combatants);
     for _i in 0i32..2 {
         let mut tx = app.pool.begin().await?;
+        let mut created_uuid: bool = false;
         let match_uuid = match app.find_existing_wow_encounter_match(&path.view_uuid, &data.timestamp, &combatants_key).await? {
             Some(uuid) => uuid,
             None => {
@@ -1491,11 +1578,22 @@ pub async fn finish_wow_encounter_handler(app : web::Data<Arc<api::ApiApplicatio
                         _ => return Err(err)
                     }
                 };
+
+                created_uuid = true;
                 new_match.uuid
             }
         };
         app.finish_wow_encounter_view(&mut tx, &path.view_uuid, &match_uuid, &data.timestamp, &data.data).await?;
         app.finish_wow_match_view(&mut tx, &path.view_uuid).await?;
+
+        if created_uuid {
+            // Only the person who creates the new match UUID should be allowed to create a match collection
+            // for consecutive pulls and add this match to a collection. This way we won't have to deal with
+            // the possibility of multiple match collections all existing that have the same set of matches in them.
+            // Note that this also has to be after .finish_wow_encounter_view() because otherwise the match uuid
+            // in the match view won't be set.
+            app.group_wow_encounter_using_session(&mut tx, &path.view_uuid, &match_uuid).await?;
+        }
 
         tx.commit().await?;
         return Ok(HttpResponse::Ok().json(match_uuid));
@@ -1507,7 +1605,7 @@ pub async fn create_wow_instance_match_handler(app : web::Data<Arc<api::ApiAppli
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::BadRequest)?;
     let mut tx = app.pool.begin().await?;
-    let uuid = app.create_wow_instance_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    let uuid = app.create_wow_instance_match_view(&mut tx, &input_match, session.user.id).await?;
     tx.commit().await?;
     Ok(HttpResponse::Ok().json(uuid))
 }
@@ -1566,7 +1664,7 @@ pub async fn convert_wow_instance_to_keystone_handler(app : web::Data<Arc<api::A
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::BadRequest)?;
 
     let mut tx = app.pool.begin().await?;
-    let uuid = app.create_wow_challenge_match_view(&mut tx, &input_match.timestamp, session.user.id, &input_match.data, &input_match.cl).await?;
+    let uuid = app.create_wow_challenge_match_view(&mut tx, &input_match, session.user.id).await?;
 
     // Pretty much the same thing as the normal thing where we create a keystone view but
     // in this case we want to update the view to have the proper UUID specified in the path.
@@ -1764,4 +1862,10 @@ pub async fn list_wow_vods_for_squad_in_match_handler(app : web::Data<Arc<api::A
         vods,
         user_to_id: user_uuid_to_id,
     }))
+}
+
+pub async fn list_wow_match_pulls_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWUserMatchPath>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(
+        app.list_ordered_wow_encounter_match_pulls(&path.match_uuid, path.user_id).await?
+    ))
 }
