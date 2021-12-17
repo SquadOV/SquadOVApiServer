@@ -288,7 +288,8 @@ impl api::ApiApplication {
                         ARRAY_AGG(web.name) AS "boss_names!",
                         ARRAY_AGG(web.npc_id) AS "boss_ids!",
                         ARRAY_AGG(wcp.current_hp) AS "boss_hps!: Vec<Option<i64>>",
-                        ARRAY_AGG(wcp.max_hp) AS "boss_max_hps!: Vec<Option<i64>>"
+                        ARRAY_AGG(wcp.max_hp) AS "boss_max_hps!: Vec<Option<i64>>",
+                        MAX(mmc.match_order) AS "pull_number"
                     FROM UNNEST($1::UUID[], $2::BIGINT[]) AS inp(match_uuid, user_id)
                     INNER JOIN squadov.wow_match_view AS wmv
                         ON wmv.match_uuid = inp.match_uuid
@@ -304,6 +305,8 @@ impl api::ApiApplication {
                     LEFT JOIN squadov.wow_match_view_character_presence AS wcp
                         ON wcp.view_id = wmv.id
                             AND wcp.creature_id = web.npc_id
+                    LEFT JOIN squadov.match_to_match_collection AS mmc
+                        ON mmc.match_uuid = inp.match_uuid
                     GROUP BY
                         wmv.match_uuid,
                         wmv.start_tm,
@@ -349,6 +352,7 @@ impl api::ApiApplication {
                                 max_hp: max,
                             }
                         }).collect::<Vec<WowBossStatus>>(),
+                        pull_number: x.pull_number,
                     }
                 })
                 .collect::<Vec<WoWEncounter>>()
