@@ -89,7 +89,7 @@ where
         WHERE user_id = $1
         ",
         user_id,
-        &data.slug,
+        &data.slug.to_lowercase(),
         data.matches,
         data.achievements,
         data.misc,

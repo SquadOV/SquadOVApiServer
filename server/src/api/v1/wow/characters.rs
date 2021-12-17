@@ -273,7 +273,7 @@ impl api::ApiApplication {
                 )
                 SELECT slug AS "slug!"
                 FROM realms
-                ORDER BY LEVENSHTEIN(name, $2) ASC
+                ORDER BY LEVENSHTEIN(name, $2::VARCHAR) ASC
                 LIMIT 1
                 "#,
                 realm_id,
