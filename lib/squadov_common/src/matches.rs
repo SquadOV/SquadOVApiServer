@@ -90,12 +90,15 @@ where
         "
         INSERT INTO squadov.match_to_match_collection (
             collection_uuid,
-            match_uuid
+            match_uuid,
+            match_order
         )
-        VALUES (
-            $1,
-            $2
-        )
+        SELECT $1, $2, COALESCE(
+            (SELECT MAX(match_order)
+            FROM squadov.match_to_match_collection
+            WHERE collection_uuid = $1
+            GROUP BY collection_uuid)
+        , 0) + 1
         ON CONFLICT DO NOTHING
         ",
         collection_uuid,
