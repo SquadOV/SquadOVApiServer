@@ -18,7 +18,6 @@ terraform {
 
 provider "aws" {
     region              = "us-east-2"
-    shared_credentials_file = "../../aws/aws_terraform_dev.profile"
     profile             = "terraformdev"
     allowed_account_ids = [ 897997503846 ]
 }

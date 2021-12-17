@@ -24,7 +24,7 @@ resource "aws_s3_bucket" "vod_storage_bucket" {
 
         transition {
             days = 90
-            storage_class = "GLACIER"
+            storage_class = "GLACIER_IR"
         }
     }
 
