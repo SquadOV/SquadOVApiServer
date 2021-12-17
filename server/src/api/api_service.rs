@@ -769,6 +769,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("/death/{event_id}", web::get().to(v1::get_death_recap_handler))
                                         .service(
                                             web::scope("/stats")
+                                                .route("/summary", web::get().to(v1::get_wow_match_stat_summary_handler))
                                                 .route("/dps", web::get().to(v1::get_wow_match_dps_handler))
                                                 .route("/hps", web::get().to(v1::get_wow_match_heals_per_second_handler))
                                                 .route("/drps", web::get().to(v1::get_wow_match_damage_received_per_second_handler))

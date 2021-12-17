@@ -26,6 +26,20 @@ pub struct WowStatDatum {
     value: f64
 }
 
+#[derive(Serialize)]
+pub struct WowStatItem {
+    guid: String,
+    value: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct WowMatchStatSummaryData {
+    pub damage_dealt: Vec<WowStatItem>,
+    pub damage_received: Vec<WowStatItem>,
+    pub heals: Vec<WowStatItem>,
+}
+
 impl api::ApiApplication {
     async fn get_wow_match_dps(&self, user_id: i64, match_uuid: &Uuid, combatant_guids: &[String], params: &WowStatsQueryParams) -> Result<HashMap<String, Vec<WowStatDatum>>, SquadOvError> {
         if params.start.is_none() || params.end.is_none() {
@@ -191,6 +205,93 @@ impl api::ApiApplication {
 
         Ok(ret_map)
     }
+
+    async fn get_wow_summary_damage_dealt(&self, user_id: i64, match_uuid: &Uuid, combatant_guids: &[String])  -> Result<Vec<WowStatItem>, SquadOvError> {
+        Ok(
+            sqlx::query_as!(
+                WowStatItem,
+                r#"
+                SELECT
+                    wcp.unit_guid AS "guid!",
+                    SUM(wde.amount) AS "value!"
+                FROM squadov.wow_match_view AS wmv
+                INNER JOIN squadov.wow_match_view_events AS wve
+                    ON wve.view_id = wmv.alt_id
+                INNER JOIN squadov.wow_match_view_character_presence AS wcp
+                    ON wcp.character_id = wve.source_char
+                INNER JOIN squadov.wow_match_view_damage_events AS wde
+                    ON wde.event_id = wve.event_id
+                WHERE wmv.match_uuid = $1
+                    AND wmv.user_id = $2
+                    AND wcp.unit_guid = ANY($3)
+                GROUP BY wcp.unit_guid
+                "#,
+                match_uuid,
+                user_id,
+                combatant_guids,
+            )
+                .fetch_all(&*self.heavy_pool)
+                .await?
+        )
+    }
+
+    async fn get_wow_summary_damage_received(&self, user_id: i64, match_uuid: &Uuid, combatant_guids: &[String])  -> Result<Vec<WowStatItem>, SquadOvError> {
+        Ok(
+            sqlx::query_as!(
+                WowStatItem,
+                r#"
+                SELECT
+                    wcp.unit_guid AS "guid!",
+                    SUM(wde.amount) AS "value!"
+                FROM squadov.wow_match_view AS wmv
+                INNER JOIN squadov.wow_match_view_events AS wve
+                    ON wve.view_id = wmv.alt_id
+                INNER JOIN squadov.wow_match_view_character_presence AS wcp
+                    ON wcp.character_id = wve.dest_char
+                INNER JOIN squadov.wow_match_view_damage_events AS wde
+                    ON wde.event_id = wve.event_id
+                WHERE wmv.match_uuid = $1
+                    AND wmv.user_id = $2
+                    AND wcp.unit_guid = ANY($3)
+                GROUP BY wcp.unit_guid
+                "#,
+                match_uuid,
+                user_id,
+                combatant_guids,
+            )
+                .fetch_all(&*self.heavy_pool)
+                .await?
+        )
+    }
+
+    async fn get_wow_summary_heals(&self, user_id: i64, match_uuid: &Uuid, combatant_guids: &[String])  -> Result<Vec<WowStatItem>, SquadOvError> {
+        Ok(
+            sqlx::query_as!(
+                WowStatItem,
+                r#"
+                SELECT
+                    wcp.unit_guid AS "guid!",
+                    SUM(GREATEST(whe.amount - whe.overheal, 0)) AS "value!"
+                FROM squadov.wow_match_view AS wmv
+                INNER JOIN squadov.wow_match_view_events AS wve
+                    ON wve.view_id = wmv.alt_id
+                INNER JOIN squadov.wow_match_view_character_presence AS wcp
+                    ON wcp.character_id = wve.source_char
+                INNER JOIN squadov.wow_match_view_healing_events AS whe
+                    ON whe.event_id = wve.event_id
+                WHERE wmv.match_uuid = $1
+                    AND wmv.user_id = $2
+                    AND wcp.unit_guid = ANY($3)
+                GROUP BY wcp.unit_guid
+                "#,
+                match_uuid,
+                user_id,
+                combatant_guids,
+            )
+                .fetch_all(&*self.heavy_pool)
+                .await?
+        )
+    }
 }
 
 pub async fn get_wow_match_dps_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWUserMatchPath>, query: web::Query<WowStatsQueryParams>) -> Result<HttpResponse, SquadOvError> {
@@ -209,4 +310,15 @@ pub async fn get_wow_match_damage_received_per_second_handler(app : web::Data<Ar
     let chars: Vec<_> = app.list_wow_characters_for_match(&path.match_uuid, path.user_id).await?.into_iter().map(|x| { x.guid }).collect();
     let stats = app.get_wow_match_damage_received_per_second(path.user_id, &path.match_uuid, &chars, &query).await?;
     Ok(HttpResponse::Ok().json(stats))
+}
+
+pub async fn get_wow_match_stat_summary_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWUserMatchPath>) -> Result<HttpResponse, SquadOvError> {
+    let chars: Vec<_> = app.list_wow_characters_for_match(&path.match_uuid, path.user_id).await?.into_iter().map(|x| { x.guid }).collect();
+    Ok(
+        HttpResponse::Ok().json(&WowMatchStatSummaryData{
+            damage_dealt: app.get_wow_summary_damage_dealt(path.user_id, &path.match_uuid, &chars).await?,
+            damage_received: app.get_wow_summary_damage_received(path.user_id, &path.match_uuid, &chars).await?,
+            heals: app.get_wow_summary_heals(path.user_id, &path.match_uuid, &chars).await?,
+        })
+    )
 }
