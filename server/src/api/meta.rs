@@ -88,33 +88,34 @@ impl api::ApiApplication {
         } else if let Some(match_uuid) = &access.match_uuid {
             let base_matches = self.get_recent_base_matches(&[RecentMatchHandle{
                 match_uuid: match_uuid.clone(),
-                user_uuid: meta_user.uuid.clone(),
+                user_uuids: vec![meta_user.uuid.clone()],
             }], user.id).await?;
-            let recent_matches = self.get_recent_matches_from_uuids(&base_matches).await?;
+            let recent_matches = self.get_recent_matches_from_uuids(base_matches).await?;
             let m = recent_matches.first().ok_or(SquadOvError::NotFound)?;
+            let pov = m.povs.first().ok_or(SquadOvError::NotFound)?;
 
-            metadata.meta_username = m.base.username.clone();
-            if let Some(aimlab) = &m.aimlab_task {
+            metadata.meta_username = pov.username.clone();
+            if let Some(aimlab) = &pov.aimlab_task {
                 metadata.meta_title = format!(
                     "Aim Lab :: {task} :: {score} [{tm}]",
                     task=&aimlab.task_name,
                     score=aimlab.score,
                     tm=aimlab.create_date.format("%Y%m%d %H:%M:%S").to_string(),
                 );
-            } else if let Some(lol) = &m.lol_match {
+            } else if let Some(lol) = &pov.lol_match {
                 metadata.meta_title = format!(
                     "League of Legends :: {mode} {win} [{tm}]",
                     mode=&lol.game_mode,
                     win=&lol.win_loss(),
                     tm=lol.game_creation.format("%Y%m%d %H:%M:%S").to_string()
                 );
-            } else if let Some(tft) = &m.tft_match {
+            } else if let Some(tft) = &pov.tft_match {
                 metadata.meta_title = format!(
                     "Teamfight Tactics :: {place} [{tm}]",
                     place=tft.placement,
                     tm=tft.game_datetime.format("%Y%m%d %H:%M:%S").to_string()
                 );
-            } else if let Some(val) = &m.valorant_match {
+            } else if let Some(val) = &pov.valorant_match {
                 metadata.meta_title = format!(
                     "Valorant ({or}-{tr}, {win}) :: {k}/{d}/{a} [{tm}]",
                     or=val.rounds_won,
@@ -127,7 +128,7 @@ impl api::ApiApplication {
                         x.format("%Y%m%d %H:%M:%S").to_string()
                     }).unwrap_or(String::from("Unknown"))
                 );
-            } else if let Some(wow_challenge) = &m.wow_challenge {
+            } else if let Some(wow_challenge) = &pov.wow_challenge {
                 metadata.meta_title = format!(
                     "WoW Keystone {instance}, +{lvl} {win} :: [{tm}]",
                     instance=&wow_challenge.challenge_name,
@@ -137,7 +138,7 @@ impl api::ApiApplication {
                         x.format("%Y%m%d %H:%M:%S").to_string()
                     }).unwrap_or(String::from("Unknown"))
                 );
-            } else if let Some(wow_encounter) = &m.wow_encounter {
+            } else if let Some(wow_encounter) = &pov.wow_encounter {
                 metadata.meta_title = format!(
                     "WoW Encounter {nm} {win} :: [{tm}]",
                     nm=&wow_encounter.encounter_name,
@@ -146,7 +147,7 @@ impl api::ApiApplication {
                         x.format("%Y%m%d %H:%M:%S").to_string()
                     }).unwrap_or(String::from("Unknown"))
                 );
-            } else if let Some(wow_arena) = &m.wow_arena {
+            } else if let Some(wow_arena) = &pov.wow_arena {
                 metadata.meta_title = format!(
                     "WoW Arena {typ} {win} :: [{tm}]",
                     typ=&wow_arena.arena_type,
@@ -155,7 +156,7 @@ impl api::ApiApplication {
                         x.format("%Y%m%d %H:%M:%S").to_string()
                     }).unwrap_or(String::from("Unknown"))
                 );
-            } else if let Some(csgo_match) = &m.csgo_match {
+            } else if let Some(csgo_match) = &pov.csgo_match {
                 metadata.meta_title = format!(
                     "CS:GO - {map} - {mode} - {fscore}:{escore} - {win} [{tm}]",
                     map=&csgo_match.map,
@@ -165,7 +166,7 @@ impl api::ApiApplication {
                     win=if csgo_match.winner { String::from("Win") } else { String::from("Loss") },
                     tm=csgo_match.match_start_time.format("%Y%m%d %H:%M:%S").to_string(),
                 );
-            } else if m.base.game == SquadOvGames::Hearthstone {
+            } else if m.game == SquadOvGames::Hearthstone {
                 metadata.meta_title = String::from("Hearthstone Match");
             } else {
                 return Err(SquadOvError::NotFound);

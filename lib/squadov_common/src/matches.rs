@@ -51,25 +51,18 @@ where
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all="camelCase")]
-pub struct BaseRecentMatch {
-    pub match_uuid: Uuid,
-    pub tm: DateTime<Utc>,
-    pub game: SquadOvGames,
+pub struct RecentMatchPov {
+    // VOD DATA
     pub vod: VodManifest,
+    pub tm: DateTime<Utc>,
     pub username: String,
     pub user_id: i64,
     pub favorite_reason: Option<String>,
     pub is_watchlist: bool,
     pub is_local: bool,
-    pub access_token: Option<String>,
     pub tags: Vec<VodTag>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all="camelCase")]
-pub struct RecentMatch {
-    pub base: BaseRecentMatch,
-
+    pub access_token: Option<String>,
+    // GAME DATA
     pub aimlab_task: Option<AimlabTask>,
     pub lol_match: Option<LolPlayerMatchSummary>,
     pub tft_match: Option<TftPlayerMatchSummary>,
@@ -79,6 +72,14 @@ pub struct RecentMatch {
     pub wow_arena: Option<WoWArena>,
     pub wow_instance: Option<WowInstance>,
     pub csgo_match: Option<CsgoPlayerMatchSummary>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct RecentMatch {
+    pub match_uuid: Uuid,
+    pub game: SquadOvGames,
+    pub povs: Vec<RecentMatchPov>,
 }
 
 pub async fn is_user_in_match<'a, T>(ex: T, user_id: i64, match_uuid: &Uuid, game: SquadOvGames) -> Result<bool, SquadOvError>
