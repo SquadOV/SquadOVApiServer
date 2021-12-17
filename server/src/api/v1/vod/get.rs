@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 
 #[derive(Deserialize)]
 pub struct VodFindFromVideoUuid {
-    video_uuid: Uuid,
+    pub video_uuid: Uuid,
 }
 
 #[derive(Deserialize)]

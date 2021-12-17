@@ -886,6 +886,18 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route(web::post().to(v1::create_clip_for_vod_handler))
                                 )
                                 .service(
+                                    web::scope("/profile")
+                                        .wrap(access::ApiAccess::new(
+                                            Box::new(access::VodAccessChecker{
+                                                must_be_vod_owner: false,
+                                                obtainer: access::VodPathObtainer{
+                                                    video_uuid_key: "video_uuid"
+                                                },
+                                            }),
+                                        ))
+                                        .route("", web::get().to(v1::get_profile_info_for_vod_handler))
+                                )
+                                .service(
                                     web::scope("/tag")
                                         .wrap(access::ApiAccess::new(
                                             Box::new(access::VodAccessChecker{

@@ -78,6 +78,13 @@ pub struct UserProfileBasicRaw {
     pub misc_access: i32,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all="camelCase")]
+pub struct UserProfileHandle {
+    pub username: String,
+    pub slug: String,
+}
+
 pub async fn create_user_profile_for_user_id<'a, T>(ex: T, id: i64, slug: &str) -> Result<(), SquadOvError>
 where
     T: Executor<'a, Database = Postgres>
@@ -201,5 +208,30 @@ pub async fn get_user_profile_basic_serialized_with_requester(ex: &PgPool, profi
                 user_id: Some(profile.user_id),
             }.encrypt(token_key)?),
         }
+    )
+}
+
+pub async fn get_user_profile_handle_from_video_uuid<'a, T>(ex: T, video: &Uuid) -> Result<UserProfileHandle, SquadOvError>
+where
+    T: Executor<'a, Database = Postgres>
+{
+    Ok(
+        sqlx::query_as!(
+            UserProfileHandle,
+            r#"
+            SELECT
+                u.username AS "username!",
+                up.link_slug AS "slug!"
+            FROM squadov.vods AS v
+            INNER JOIN squadov.users AS u
+                ON u.uuid = v.user_uuid
+            INNER JOIN squadov.user_profiles AS up
+                ON up.user_id = u.id
+            WHERE v.video_uuid = $1
+            "#,
+            video,
+        )
+            .fetch_one(ex)
+            .await?
     )
 }

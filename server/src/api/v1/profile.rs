@@ -1,6 +1,7 @@
 use crate::api::{
     ApiApplication,
     auth::SquadOVSession,
+    v1::VodFindFromVideoUuid,
 };
 use actix_web::{
     web::{
@@ -240,4 +241,8 @@ pub async fn delete_match_clip_profile_share_handler(app : web::Data<Arc<ApiAppl
     }
 
     Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn get_profile_info_for_vod_handler(app : web::Data<Arc<ApiApplication>>, path: web::Path<VodFindFromVideoUuid>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(&profile::get_user_profile_handle_from_video_uuid(&*app.pool, &path.video_uuid).await?))
 }
