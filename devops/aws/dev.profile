@@ -1,3 +1,3 @@
 [api]
-aws_access_key_id=AKIA5CFGSPVTHCUPCGHS
-aws_secret_access_key=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
+aws_access_key_id=AKIA3KTEWCLF6QFRL6BH
+aws_secret_access_key=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

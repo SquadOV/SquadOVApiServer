@@ -7,7 +7,7 @@ terraform {
     }
 
     backend "s3" {
-        bucket = "squadov-aws-tf-dev-state"
+        bucket = "squadov-aws-tf-dev-state-mike"
         key = "tfstate"
         region = "us-east-2"
         profile = "terraformdev"
@@ -19,7 +19,7 @@ terraform {
 provider "aws" {
     region              = "us-east-2"
     profile             = "terraformdev"
-    allowed_account_ids = [ 897997503846 ]
+    allowed_account_ids = [ 778673984203 ]
 }
 
 module "iam" {
@@ -29,5 +29,5 @@ module "iam" {
 module "storage" {
     source = "../modules/storage"
 
-    bucket_suffix = "-dev"
+    bucket_suffix = "-dev-mike"
 }
