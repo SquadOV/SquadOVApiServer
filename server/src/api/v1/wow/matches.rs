@@ -1489,6 +1489,33 @@ impl api::ApiApplication {
         matches::add_match_to_collection(&mut *tx, match_uuid, &collection_uuid).await?;
         Ok(())
     }
+
+    async fn list_ordered_wow_encounter_match_pulls(&self, match_uuid: &Uuid, user_id: i64) -> Result<Vec<Uuid>, SquadOvError> {
+        Ok(
+            sqlx::query!(
+                "
+                SELECT mmc2.match_uuid
+                FROM squadov.match_to_match_collection AS mmc
+                INNER JOIN squadov.match_to_match_collection AS mmc2
+                    ON mmc2.collection_uuid = mmc.collection_uuid
+                INNER JOIN squadov.wow_match_view AS wmv
+                    ON wmv.match_uuid = mmc2.match_uuid
+                WHERE mmc.match_uuid = $1
+                    AND wmv.user_id = $2
+                ORDER BY wmv.end_tm ASC
+                ",
+                match_uuid,
+                user_id,
+            )
+                .fetch_all(&*self.pool)
+                .await?
+                .into_iter()
+                .map(|x| {
+                    x.match_uuid
+                })
+                .collect::<Vec<Uuid>>()
+        )
+    }
 }
 
 pub async fn create_wow_encounter_match_handler(app : web::Data<Arc<api::ApiApplication>>, input_match: web::Json<GenericMatchCreationRequest<WoWEncounterStart>>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
@@ -1835,4 +1862,10 @@ pub async fn list_wow_vods_for_squad_in_match_handler(app : web::Data<Arc<api::A
         vods,
         user_to_id: user_uuid_to_id,
     }))
+}
+
+pub async fn list_wow_match_pulls_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<super::WoWUserMatchPath>) -> Result<HttpResponse, SquadOvError> {
+    Ok(HttpResponse::Ok().json(
+        app.list_ordered_wow_encounter_match_pulls(&path.match_uuid, path.user_id).await?
+    ))
 }
