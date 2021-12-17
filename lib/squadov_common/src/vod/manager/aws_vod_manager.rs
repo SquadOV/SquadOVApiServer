@@ -69,8 +69,8 @@ impl S3VodManager {
 
 #[async_trait]
 impl VodManager for S3VodManager {
-    fn manager_type(&self) -> super::VodManagerType {
-        super::VodManagerType::S3
+    fn manager_type(&self) -> super::UploadManagerType {
+        super::UploadManagerType::S3
     }
 
     async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {

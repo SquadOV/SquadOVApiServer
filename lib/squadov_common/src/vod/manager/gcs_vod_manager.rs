@@ -58,8 +58,8 @@ impl GCSVodManager {
 
 #[async_trait]
 impl VodManager for GCSVodManager {
-    fn manager_type(&self) -> super::VodManagerType {
-        super::VodManagerType::GCS
+    fn manager_type(&self) -> super::UploadManagerType {
+        super::UploadManagerType::GCS
     }
 
     async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {       

@@ -153,6 +153,7 @@ impl api::ApiApplication {
                 bucket,
                 session: session_id,
                 loc: manager.manager_type(),
+                purpose: manager.upload_purpose(),
             }
         )
     }

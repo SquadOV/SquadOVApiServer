@@ -19,6 +19,7 @@ mod community;
 mod profile;
 mod sentry;
 mod twitch;
+mod speed_check;
 mod discord;
 
 pub use user::*;
@@ -27,6 +28,7 @@ pub use aimlab::*;
 pub use hearthstone::*;
 pub use valorant::*;
 pub use vod::*;
+pub use speed_check::*;
 pub use squad::*;
 pub use bug::*;
 pub use wow::*;

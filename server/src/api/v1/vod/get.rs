@@ -6,7 +6,9 @@ use squadov_common::{
     VodTrack,
     VodDestination,
     VodSegmentId,
-    vod::db,
+    vod::{
+        db,
+    }
 };
 use crate::api;
 use actix_web::{web, HttpResponse};
@@ -23,11 +25,11 @@ pub struct VodFindFromVideoUuid {
 }
 
 #[derive(Deserialize)]
-pub struct VodPartQuery {
+pub struct UploadPartQuery {
     // Should all be set or none be set.
-    part: Option<i64>,
-    session: Option<String>,
-    bucket: Option<String>,
+    pub part: Option<i64>,
+    pub session: Option<String>,
+    pub bucket: Option<String>,
 }
 
 impl api::ApiApplication {
@@ -187,7 +189,7 @@ pub async fn get_vod_handler(data : web::Path<VodFindFromVideoUuid>, app : web::
     Ok(HttpResponse::Ok().json(data))
 }
 
-pub async fn get_vod_upload_path_handler(data : web::Path<VodFindFromVideoUuid>, query: web::Query<VodPartQuery>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_vod_upload_path_handler(data : web::Path<VodFindFromVideoUuid>, query: web::Query<UploadPartQuery>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError> {
     let mut assocs = app.find_vod_associations(&[data.video_uuid.clone()]).await?;
     let vod = assocs.remove(&data.video_uuid).ok_or(SquadOvError::NotFound)?;
     Ok(HttpResponse::Ok().json(&
@@ -208,6 +210,7 @@ pub async fn get_vod_upload_path_handler(data : web::Path<VodFindFromVideoUuid>,
                         bucket: bucket.clone(),
                         session: session.clone(),
                         loc: manager.manager_type(),
+                        purpose: manager.upload_purpose(),
                     }
                 } else {
                     return Err(SquadOvError::BadRequest);

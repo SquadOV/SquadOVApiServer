@@ -36,8 +36,8 @@ impl FilesystemVodManager {
 
 #[async_trait]
 impl VodManager for FilesystemVodManager {
-    fn manager_type(&self) -> super::VodManagerType {
-        super::VodManagerType::FileSystem
+    fn manager_type(&self) -> super::UploadManagerType {
+        super::UploadManagerType::FileSystem
     }
 
     async fn get_segment_redirect_uri(&self, segment: &VodSegmentId) -> Result<(String, Option<DateTime<Utc>>), SquadOvError> {

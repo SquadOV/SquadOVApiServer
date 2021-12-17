@@ -103,6 +103,29 @@ resource "aws_s3_bucket_policy" "vod_bucket_policy" {
     policy = data.aws_iam_policy_document.vod_access_policy.json
 }
 
+resource "aws_s3_bucket" "speed_check_storage_bucket" {
+    bucket = "squadov-us-speed-check-bucket${var.bucket_suffix}"
+    acl = "private"
+
+    lifecycle_rule {
+        enabled = true
+        abort_incomplete_multipart_upload_days = 1
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            apply_server_side_encryption_by_default {
+                sse_algorithm = "AES256"
+            }
+        }
+    }
+
+    tags = {
+        "s3" = "speed_check"
+        "speed_check" = "raw_s3"
+    }
+}
+
 resource "aws_s3_bucket" "blob_storage_bucket" {
     bucket = "squadov-us-blob-bucket${var.bucket_suffix}"
     acl = "private"

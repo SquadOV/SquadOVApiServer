@@ -16,25 +16,35 @@ use chrono::{DateTime, Utc};
 
 #[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
 #[repr(i32)]
-pub enum VodManagerType {
+pub enum UploadManagerType {
     FileSystem,
     GCS,
     S3,
 }
 
-pub fn get_vod_manager_type(root: &str) -> VodManagerType {
+#[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
+#[repr(i32)]
+pub enum UploadPurpose {
+    VOD,
+    SpeedCheck,
+}
+
+pub fn get_upload_manager_type(root: &str) -> UploadManagerType {
     if root.starts_with("gs://") {
-        VodManagerType::GCS
+        UploadManagerType::GCS
     } else if root.starts_with("s3://") {
-        VodManagerType::S3
+        UploadManagerType::S3
     } else {
-        VodManagerType::FileSystem
+        UploadManagerType::FileSystem
     }
 }
 
 #[async_trait]
 pub trait VodManager {
-    fn manager_type(&self) -> VodManagerType;
+    fn manager_type(&self) -> UploadManagerType;
+    fn upload_purpose(&self) -> UploadPurpose {
+        UploadPurpose::VOD
+    }
 
     // Returns a session string that can be passed to get_segment_upload_uri
     async fn start_segment_upload(&self, segment: &VodSegmentId) -> Result<String, SquadOvError>;
