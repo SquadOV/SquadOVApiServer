@@ -48,6 +48,11 @@ pub async fn main() -> Result<(), SquadOvError> {
     for i in 0..config.kafka.wow_combat_log_threads {
         log::info!("Spawning Kafka Worker: {}", i);
         tasks.push(wow_kafka::create_wow_consumer_thread(app.clone(), &config.kafka.wow_combat_log_topic, &kafka_config));
+
+        // In an attempt to reduce the number of DNS queries we have to make and potentially overloading
+        // the machine we're on with too many open files? No idea why this might help or if it'll work
+        // but this is for SquadOVClient#2356.
+        async_std::task::sleep(std::time::Duration::from_millis(100)).await;
     }
 
     for handle in tasks {
