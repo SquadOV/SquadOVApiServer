@@ -1,3 +1,6 @@
 [terraformdev]
 aws_access_key_id=AKIA3KTEWCLF6QFRL6BH
 aws_secret_access_key=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
+[terraformdevsteven]
+aws_access_key_id=AKIAVNMIIPRUXEIELQMB
+aws_secret_access_key=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
