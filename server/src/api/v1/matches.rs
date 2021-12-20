@@ -411,7 +411,7 @@ impl api::ApiApplication {
                     ON mcd.match_uuid = vm.match_uuid
                 LEFT JOIN squadov.valorant_match_pov_computed_data AS pcd
                     ON pcd.match_uuid = vm.match_uuid
-                        AND pcd.user_id = u.id
+                        AND pcd.user_id = vu.id
                 WHERE u.id = $1
                     AND (CARDINALITY($4::INTEGER[]) = 0 OR m.game = ANY($4))
                     AND (CARDINALITY($6::BIGINT[]) = 0 OR vu.id = ANY($6))
