@@ -284,6 +284,10 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                     web::scope("/discover")
                                         .route("/squads", web::get().to(v1::get_user_discover_squads_handler))
                                 )
+                                .service(
+                                    web::scope("/analytics")
+                                        .route("/vod/{video_uuid}", web::post().to(v1::create_user_vod_watch_analytics_handler))
+                                )
                         )
                         .service(
                             web::scope("/{user_id}")

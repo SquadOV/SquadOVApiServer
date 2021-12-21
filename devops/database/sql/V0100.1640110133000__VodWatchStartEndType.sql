@@ -1,0 +1,3 @@
+ALTER TABLE vod_watch_analytics
+ALTER COLUMN start_seconds TYPE DOUBLE PRECISION,
+ALTER COLUMN end_seconds TYPE DOUBLE PRECISION;

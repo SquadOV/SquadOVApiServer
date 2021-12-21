@@ -1,15 +1,25 @@
 use squadov_common::SquadOvError;
 use actix_web::{web, HttpResponse, HttpRequest};
 use std::sync::Arc;
-use crate::api;
-use crate::api::auth::SquadOVSession;
+use crate::api::{
+    self,
+    auth::SquadOVSession,
+    v1::VodFindFromVideoUuid,
+};
 use serde::Deserialize;
 use sqlx::{Transaction, Postgres};
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct ReferralQuery {
     #[serde(rename="ref")]
     pub referral_code: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct VodWatchRangeData {
+    pub start: f64,
+    pub end: f64,
 }
 
 impl api::ApiApplication {
@@ -153,6 +163,33 @@ impl api::ApiApplication {
             .await?;
         Ok(())
     }
+
+    pub async fn add_user_vod_watch_analytics(&self, video_uuid: &Uuid, user_id: i64, start: f64, end: f64) -> Result<(), SquadOvError> {
+        sqlx::query!(
+            "
+            INSERT INTO squadov.vod_watch_analytics (
+                video_uuid,
+                user_id,
+                start_seconds,
+                end_seconds,
+                tm
+            ) VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                NOW()
+            )
+            ",
+            video_uuid,
+            user_id,
+            start,
+            end,
+        )
+            .execute(&*self.pool)
+            .await?;
+        Ok(())
+    }
 }
 
 pub async fn public_landing_visit_handler(app : web::Data<Arc<api::ApiApplication>>, query: web::Query<ReferralQuery>) -> Result<HttpResponse, SquadOvError> {
@@ -203,4 +240,11 @@ pub async fn get_user_me_referral_link_handler(app : web::Data<Arc<api::ApiAppli
         &app.config.squadov.landing_url,
         code
     )))
+}
+
+pub async fn create_user_vod_watch_analytics_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<VodFindFromVideoUuid>, data: web::Json<VodWatchRangeData>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+    let extensions = req.extensions();
+    let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
+    app.add_user_vod_watch_analytics(&path.video_uuid, session.user.id, data.start, data.end).await?;
+    Ok(HttpResponse::NoContent().finish())
 }
