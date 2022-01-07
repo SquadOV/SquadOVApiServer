@@ -194,12 +194,12 @@ resource "aws_s3_bucket_policy" "blob_bucket_policy" {
 }
 
 resource "aws_cloudfront_public_key" "private_s3_vod_cloudfront_public_key" {
-    name = "private-s3-vod-cloudfront-public-key"
+    name = "private-s3-vod-cloudfront-public-key${var.cloudfront_suffix}"
     encoded_key = file("../../aws/keys/private_s3_vod_cloudfront_PUBLIC_KEY.pem")
 }
 
 resource "aws_cloudfront_key_group" "private_s3_vod_cloudfront_key_group" {
-    name = "private-s3-vod-cloudfront-key-group"
+    name = "private-s3-vod-cloudfront-key-group${var.cloudfront_suffix}"
     items = [ aws_cloudfront_public_key.private_s3_vod_cloudfront_public_key.id ]
 }
 

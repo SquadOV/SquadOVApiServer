@@ -3335,6 +3335,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusoto_cognito_identity"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adb9a801c61d49790fbe84f0ba01cae11a2ac766cb467a10925a6428c4a4bc5d"
+dependencies = [
+ "async-trait",
+ "bytes 0.5.6",
+ "chrono",
+ "futures",
+ "rusoto_core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rusoto_core"
 version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3900,6 +3915,7 @@ dependencies = [
  "rand 0.8.4",
  "rdkafka",
  "reqwest",
+ "rusoto_cognito_identity",
  "serde",
  "serde_json",
  "serde_qs",
@@ -3964,6 +3980,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rsa",
+ "rusoto_cognito_identity",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_s3",

@@ -279,7 +279,7 @@ pub struct ApiApplication {
     pub twitch_itf: Arc<TwitchApiRabbitmqInterface>,
     pub sharing_itf: Arc<SharingRabbitmqInterface>,
     gcp: Arc<Option<GCPClient>>,
-    aws: Arc<Option<AWSClient>>,
+    pub aws: Arc<Option<AWSClient>>,
     pub hashid: Arc<harsh::Harsh>,
     pub ip: Arc<IpstackClient>,
     pub segment: Arc<SegmentClient>,

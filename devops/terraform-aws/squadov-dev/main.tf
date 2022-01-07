@@ -24,10 +24,16 @@ provider "aws" {
 
 module "iam" {
     source = "../modules/iam"
+    resource_suffix = "-dev-mike"
 }
 
 module "storage" {
     source = "../modules/storage"
 
     bucket_suffix = "-dev-mike"
+    cloudfront_suffix = "-dev-mike"
+}
+
+module "combatlog" {
+    source = "../modules/combatlog"
 }

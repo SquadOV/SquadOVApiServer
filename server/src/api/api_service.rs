@@ -145,6 +145,20 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                         )
                 )
                 .service(
+                    web::scope("/aws")
+                        .wrap(access::ApiAccess::new(
+                            Box::new(access::DenyShareTokenAccess{}),
+                        ))
+                        .route("/credentials", web::get().to(v1::get_aws_credentials_handler))
+                )
+                .service(
+                    web::scope("/cl")
+                        .wrap(access::ApiAccess::new(
+                            Box::new(access::DenyShareTokenAccess{}),
+                        ))
+                        .route("/config", web::get().to(v1::get_combatlog_config_handler))
+                )
+                .service(
                     web::scope("/speedcheck")
                         .service(
                             web::scope("/{file_name_uuid}")

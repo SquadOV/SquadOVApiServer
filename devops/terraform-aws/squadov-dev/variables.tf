@@ -9,7 +9,3 @@ variable "postgres_password" {
 variable "postgres_instance_name" {
     type = string
 }
-
-variable "state_bucket" {
-    type = string
-}

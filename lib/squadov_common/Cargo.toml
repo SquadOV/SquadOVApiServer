@@ -59,6 +59,7 @@ convert_case = "0.4.0"
 rusoto_core = "0.45.0"
 rusoto_s3 = "0.45.0"
 rusoto_credential = "0.45.0"
+rusoto_cognito_identity = "0.45.0"
 image = "0.23.14"
 harsh = "0.2.1"
 petname = { path="../../deps/cargo/rust-petname", version = "1.1.0" }

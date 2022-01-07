@@ -1,6 +1,7 @@
 use crate::SquadOvError;
 use rusoto_core::{Region, HttpClient};
 use rusoto_s3::S3Client;
+use rusoto_cognito_identity::CognitoIdentityClient;
 use rusoto_credential::ProfileProvider;
 use serde::{Deserialize};
 use rsa::{
@@ -11,6 +12,7 @@ use rsa::{
 };
 use sha1::Digest;
 use chrono::{Utc, Duration};
+use std::str::FromStr;
 
 #[derive(Deserialize,Debug,Clone)]
 pub struct AWSCDNConfig {
@@ -22,17 +24,27 @@ pub struct AWSCDNConfig {
 }
 
 #[derive(Deserialize,Debug,Clone)]
+pub struct AWSCognitoConfig {
+    pub pool_id: String,
+    pub provider: String,
+}
+
+#[derive(Deserialize,Debug,Clone)]
 pub struct AWSConfig {
     pub enabled: bool,
     pub credential_path: String,
     pub profile: String,
     pub cdn: AWSCDNConfig,
+    pub region: String,
+    pub account_id: String,
+    pub cognito: AWSCognitoConfig,
 }
 
 pub struct AWSClient {
     pub region: Region,
     pub provider: ProfileProvider,
     pub s3: S3Client,
+    pub cognito: CognitoIdentityClient,
     pub config: AWSConfig,
     cdn_private_key: RsaPrivateKey,
 }
@@ -40,12 +52,12 @@ pub struct AWSClient {
 impl AWSClient {
     pub fn new(config: &AWSConfig) -> Self {
         let provider = ProfileProvider::with_configuration(&config.credential_path, &config.profile);
-        // TODO: Don't hard-code region.
-        let region = Region::UsEast2;
+        let region = Region::from_str(config.region.as_str()).unwrap();
         Self {
             region: region.clone(),
             provider: provider.clone(),
-            s3: S3Client::new_with(HttpClient::new().unwrap(), provider.clone(), region),
+            s3: S3Client::new_with(HttpClient::new().unwrap(), provider.clone(), region.clone()),
+            cognito: CognitoIdentityClient::new_with(HttpClient::new().unwrap(), provider.clone(), region.clone()),
             config: config.clone(),
             cdn_private_key: RsaPrivateKey::read_pkcs1_pem_file(std::path::Path::new(&config.cdn.private_key_fname)).unwrap(),
         }

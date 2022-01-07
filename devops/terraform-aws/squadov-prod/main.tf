@@ -30,6 +30,8 @@ module "network" {
 
 module "iam" {
     source = "../modules/iam"
+
+    resource_suffix = "-prod"
 }
 
 module "db" {
@@ -49,6 +51,7 @@ module "storage" {
     source = "../modules/storage"
 
     bucket_suffix = "-prod"
+    cloudfront_suffix = ""
 }
 
 module "k8s" {
@@ -57,4 +60,8 @@ module "k8s" {
     public_k8s_subnets = module.network.public_k8s_subnets
     private_k8s_subnets = module.network.private_k8s_subnets
     default_fargate_subnets = module.network.default_fargate_subnets
+}
+
+module "combatlog" {
+    source = "../modules/combatlog"
 }
