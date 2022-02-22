@@ -33,3 +33,7 @@ variable "postgres_max_db_size" {
 variable "redis_instance_type" {
     type = string
 }
+
+variable "glue_subnet" {
+    type = string
+}

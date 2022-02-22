@@ -37,6 +37,14 @@ resource "aws_security_group" "database_security_group" {
         cidr_blocks = ["0.0.0.0/0"]
     }
 
+    ingress {
+        description = "Internal"
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        self = true
+    }
+
     egress {
         from_port = 0
         to_port = 0
@@ -176,6 +184,11 @@ resource "aws_vpc_endpoint_route_table_association" "s3_private_rt_a" {
 
 resource "aws_vpc_endpoint_route_table_association" "s3_private_rt_c" {
     route_table_id = aws_route_table.private_route_table_c.id
+    vpc_endpoint_id = aws_vpc_endpoint.s3_endpoint_us_east_2.id
+}
+
+resource "aws_vpc_endpoint_route_table_association" "s3_public_rt" {
+    route_table_id = aws_route_table.public_route_table.id
     vpc_endpoint_id = aws_vpc_endpoint.s3_endpoint_us_east_2.id
 }
 

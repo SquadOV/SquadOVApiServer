@@ -52,6 +52,8 @@
 	"DISCORD_CLIENT_SECRET": "ENC[AES256_GCM,data:QC5TlgtZq9DZwKz0xt3X0UizU3CiAvnpASChF/oCG9Y=,iv:TjL6rFI0P+HpmHSOAQG58s4fODoaHhiEy9HjsBC5C08=,tag:1OIcLGtjD+KF/4vK+/VDKA==,type:str]",
 	"DEFAULT_SPEED_CHECK_BUCKET": "ENC[AES256_GCM,data:oGYKn/bBTDSBRlOGS2+K96iG3HoIIWDRhCeSOaN1COzRZUhexC6J,iv:QkZHuZajsiowRkRZIEx2f0LH73WqLTSyn8nr/7ZXc0U=,tag:XzqS+OIM7PtzTH0hW1cVvw==,type:str]",
 	"REDIS_URL": "ENC[AES256_GCM,data:Lpqwed+jGLWqYKw9O5Utl7PI5SetWeAAhKvrmrhqANVjR7bSNCAC47kx3HURDrguGr8=,iv:d09OM9v4Wbv2/607O6uqT8QDmJ186+jkNouiEVRKM0s=,tag:XTMph2Y2YnNSk5OcZTeBhg==,type:str]",
+	"REDSHIFT_USER": "ENC[AES256_GCM,data:NLoeKrm2eH71cTDcCJDV,iv:BYp+CQqMZWvRyDYB+S2ljvOTKQvBgeStUQ8XefpXxis=,tag:pp80QdpIxdsW3Vy+1LvfiQ==,type:str]",
+	"REDSHIFT_PASSWORD": "ENC[AES256_GCM,data:VLXNkVGQvA3Np1IvnnSWsw==,iv:5QuFLHnA52SLKCoX3dkOl7fGnpb2GQFgY8fiuxjrGtU=,tag:AeEVU+DWVyeeiIufsxRS+Q==,type:str]",
 	"sops": {
 		"kms": null,
 		"gcp_kms": [
@@ -63,8 +65,8 @@
 		],
 		"azure_kv": null,
 		"hc_vault": null,
-		"lastmodified": "2022-01-15T19:05:08Z",
-		"mac": "ENC[AES256_GCM,data:eag4/oFn14LXgGKyqW8iJXXCsr2FdSBkyHkm+abiaSvy6mPGVY3rs9IztGKzeBCzSRPQfiyEXBoxhxy5cjW5MVG+g7NeOUcfcIYKpOWxQJt2zLFPrOkkPx0W6dE9hyoB6dfXCazCz7xsoGO3diVAuRoXR77YtBGBJMVak/SP23E=,iv:afghIwEMgqggArU6ES5ovQ3oF5XfxhqsCKWHs7AT5po=,tag:yJIaffwGM9oI6bE9RwslJA==,type:str]",
+		"lastmodified": "2022-02-22T17:50:11Z",
+		"mac": "ENC[AES256_GCM,data:g3R/I3NVAVTS0Iz9fDJAE/BhxTS62EOVk3whAidikV8utvSPP4WNg7w0eBuDUGB/dvvQgxkMUcWwLaw5YfgoqArKA4eC4RKRz90ixbpcyzONpIMq/slwi1jesEC2jUKZ6B4RBlScdnpDnrZD03gZQhxIsUbTZEzyMjVWO6Wnw00=,iv:8Oa4Fp0Ks5OJj+gFi1oxuFdSCowYu8K2RIHgJiaTGdk=,tag:KhOxF6SJY1kY33UesLh5Fg==,type:str]",
 		"pgp": null,
 		"unencrypted_suffix": "_unencrypted",
 		"version": "3.6.1"
