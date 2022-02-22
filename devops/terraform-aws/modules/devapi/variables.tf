@@ -17,3 +17,7 @@ variable "redshift_security_groups" {
 variable "db_glue_connection_name" {
     type = string
 }
+
+variable "glue_subnet" {
+    type = string
+}

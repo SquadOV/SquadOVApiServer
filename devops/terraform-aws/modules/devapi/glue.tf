@@ -64,3 +64,14 @@ resource "aws_glue_crawler" "rds_crawler" {
         path            = "squadov/squadov/%"
     }
 }
+
+resource "aws_glue_crawler" "redshift_crawler" {
+    database_name = aws_glue_catalog_database.glue_db.name
+    name = "redshift-crawler"
+    role = aws_iam_role.glue_role.arn
+
+    jdbc_target {
+        connection_name = aws_glue_connection.redshift_connection.name
+        path            = "squadov/%"
+    }
+}

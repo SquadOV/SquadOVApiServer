@@ -38,6 +38,14 @@ resource "aws_security_group" "database_security_group" {
     }
 
     ingress {
+        description = "Redshift connections."
+        from_port = 5439
+        to_port = 5439
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
         description = "Internal"
         from_port = 0
         to_port = 0
