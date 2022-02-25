@@ -27,7 +27,7 @@ resource "aws_glue_job" "transfer_wow_arenas" {
     }
 
     glue_version = "3.0"
-    worker_type = "G.1X"
+    worker_type = "G.2X"
     number_of_workers = 4
     max_retries = 0
 
@@ -35,6 +35,8 @@ resource "aws_glue_job" "transfer_wow_arenas" {
         "--job-name" = "squadov_transfer_wow_arenas"
         "--job-bookmark-option": "job-bookmark-enable"
         "--TempDir": "s3://${aws_s3_bucket.glue_tmp_job_bucket.id}/tmp"
+        "--write-shuffle-files-to-s3": "true"
+        "--write-shuffle-spills-to-s3": "true"
         "--IamRole": aws_iam_role.redshift_role.arn
         "--continuous-log-logGroup"          = aws_cloudwatch_log_group.glue_jobs.name
         "--continuous-log-logStreamPrefix"   = "transfer_wow_arenas"

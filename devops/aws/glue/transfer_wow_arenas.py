@@ -5,7 +5,7 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.dynamicframe import DynamicFrame
-from pyspark.sql.functions import collect_list, struct, lit, to_json, col, date_format
+from pyspark.sql.functions import collect_list, struct, lit, to_json, col
 
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'TempDir', 'IamRole'])
 glueContext = GlueContext(SparkContext.getOrCreate())
@@ -58,13 +58,13 @@ validArenaMatchViews = wowMatchViews.join(
 #   - 'id' -> 'id'
 #   - 'start_tm' -> 'tm'
 #   - 'build_version' -> 'build'
-#   - {'instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds', 'new_ratings'} -> 'info'
+#   - {'instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds'} -> 'info'
 print('Transform Arena Matches to Output...')
 outputMatchData = validArenaMatchViews.select(
     'id',
     'start_tm',
     'build_version',
-    to_json(struct('instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds', 'new_ratings')).alias('info')
+    to_json(struct('instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds')).alias('info')
 ).withColumnRenamed(
     'build_version',
     'build'
@@ -78,12 +78,12 @@ outputMatchData = validArenaMatchViews.select(
 
 # Write match data and combatant data to redshift.
 print('Write Arena Match Data...', outputMatchData.count())
-glueContext.write_dynamic_frame.from_catalog(
-    frame=DynamicFrame.fromDF(outputMatchData, glueContext, 'outputMatchData'),
-    database='squadov-glue-database', 
-    table_name="squadov_public_wow_matches", 
-    redshift_tmp_dir=args['TempDir'], 
-    additional_options={'aws_iam_role': args['IamRole']})
+#glueContext.write_dynamic_frame.from_catalog(
+#    frame=DynamicFrame.fromDF(outputMatchData, glueContext, 'outputMatchData'),
+#    database='squadov-glue-database', 
+#    table_name="squadov_public_wow_matches", 
+#    redshift_tmp_dir=args['TempDir'], 
+#    additional_options={'aws_iam_role': args['IamRole']})
 
 # For the match combatant table, we want to insert a new row for each combatant in each match
 print('Get WoW Match Characters...')
@@ -92,7 +92,9 @@ wowMatchCharacters = glueContext.create_dynamic_frame.from_catalog(
     table_name='squadov_squadov_wow_match_view_character_presence',
     transformation_ctx='wowMatchCharacters',
     additional_options = {"jobBookmarkKeys":['character_id'],'jobBookmarkKeysSortOrder':'asc'}
-).toDF()
+).toDF().filter(
+    col('has_combatant_info') == True
+)
 
 # First, we want to get the valid characters with combatant infos.
 print('Join characters to arena views...')
@@ -105,6 +107,8 @@ validMatchCharacters = validArenaMatchViews.join(
     'character_id',
     'unit_guid'
 )
+
+print('total chars: ', validMatchCharacters.count())
 
 # Next we need to make sure all the combatant info is transformed into the proper format (aka only having 1 row per combatant).
 print('Get WoW Match Combatants...')
@@ -209,13 +213,13 @@ outputMatchCombatantData = st3.select(
 outputMatchCombatantData.printSchema()
 print('...Post Select')
 
-print('Write Combatant Match Data...')
-glueContext.write_dynamic_frame.from_catalog(
-    frame=DynamicFrame.fromDF(outputMatchCombatantData, glueContext, 'outputMatchCombatantData'),
-    database='squadov-glue-database', 
-    table_name="squadov_public_wow_match_combatants", 
-    redshift_tmp_dir=args['TempDir'], 
-    additional_options={'aws_iam_role': args['IamRole']})
+print('Write Combatant Match Data...', outputMatchCombatantData.count())
+#glueContext.write_dynamic_frame.from_catalog(
+#    frame=DynamicFrame.fromDF(outputMatchCombatantData, glueContext, 'outputMatchCombatantData'),
+#    database='squadov-glue-database', 
+#    table_name="squadov_public_wow_match_combatants", 
+#    redshift_tmp_dir=args['TempDir'], 
+#    additional_options={'aws_iam_role': args['IamRole']})
 
 print('Commit Job...')
 job.commit()
