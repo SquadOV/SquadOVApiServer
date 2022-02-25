@@ -21,3 +21,7 @@ variable "db_glue_connection_name" {
 variable "glue_subnet" {
     type = string
 }
+
+variable "bucket_suffix" {
+    type = string
+}

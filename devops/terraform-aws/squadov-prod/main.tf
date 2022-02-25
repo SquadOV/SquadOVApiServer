@@ -72,4 +72,5 @@ module "devapi" {
     redshift_security_groups = module.network.database_security_groups
     db_glue_connection_name = module.db.rds_glue_connection_name
     glue_subnet = module.network.private_k8s_subnets[0]
+    bucket_suffix = "-prod"
 }

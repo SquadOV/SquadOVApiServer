@@ -5,34 +5,41 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.dynamicframe import DynamicFrame
+from pyspark.sql.functions import collect_list, struct, lit, to_json, col, date_format
 
-args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'TempDir', 'IamRole'])
 glueContext = GlueContext(SparkContext.getOrCreate())
+print('JOB_NAME: ', args['JOB_NAME'])
+print('TempDir: ', args['TempDir'])
+print('IamRole: ', args['IamRole'])
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
 # This gets all the arena views since the last time this job was run.
-from awsglue.dynamicframe import DynamicFrame
-wowMatchViews = DynamicFrame.fromDF(Join.apply(
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_match_view',
-        transformation_ctx='wowMatchViews',
-        additional_options = {"jobBookmarkKeys":['start_tm'],'jobBookmarkKeysSortOrder':'asc'}
-    ),
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_arena_view'
-    ),
-    'id',
-    'view_id'
-).toDF().dropDuplicates(['match_uuid']),
-    glueContext,
-    'wowMatchViews'
+print('Get WoW Match Views...')
+wowMatchViews = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_match_view',
+    transformation_ctx='wowMatchViews',
+    additional_options = {"jobBookmarkKeys":['start_tm'],'jobBookmarkKeysSortOrder':'asc'}
+).toDF()
+
+print('Get WoW Arena Views...')
+wowArenaViews = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_arena_view'
+).toDF()
+
+print('Join Arena Views...')
+validArenaMatchViews = wowMatchViews.join(
+    wowArenaViews,
+    wowMatchViews['id'] == wowArenaViews['view_id'],
+    'inner'
+).dropDuplicates(
+    ['match_uuid']
 ).filter(
-    lambda x: x['advanced_log'] and x['end_tm'] is not None,
-    transformation_ctx='wowMatchViews-filter'
-).drop_fields([
+    (wowMatchViews['advanced_log'] == True) & (wowMatchViews['end_tm'].isNotNull())
+).drop(
     'advanced_log',
     'player_rating',
     'player_spec',
@@ -40,8 +47,6 @@ wowMatchViews = DynamicFrame.fromDF(Join.apply(
     't1_specs',
     'player_team',
     'session_id'
-],
-    transformation_ctx='wowMatchViews-drop'
 )
 
 # Now we need to fenagle the data frame into the format that we ewant for storing into Redshift.
@@ -54,116 +59,143 @@ wowMatchViews = DynamicFrame.fromDF(Join.apply(
 #   - 'start_tm' -> 'tm'
 #   - 'build_version' -> 'build'
 #   - {'instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds', 'new_ratings'} -> 'info'
-def transformMatchData(rec):
-    rec['info'] = {}
-    rec['info']['instance_id'] = rec['instance_id']
-    rec['info']['arena_type'] = rec['arena_type']
-    rec['info']['winning_team_id'] = rec['winning_team_id']
-    rec['info']['match_duration_seconds'] = rec['match_duration_seconds']
-    rec['info']['new_ratings'] = rec['new_ratings']
-    rec['match_type'] = 'arena'
-    del rec['instance_id']
-    del rec['arena_type']
-    del rec['winning_team_id']
-    del rec['match_duration_seconds']
-    del rec['new_ratings']
-    return rec
-outputMatchData = Map.apply(
-    wowMatchViews.select_fields([
-        'id',
-        'start_tm',
-        'build_version',
-        'instance_id',
-        'arena_type',
-        'winning_team_id',
-        'match_duration_seconds',
-        'new_ratings'
-    ]).rename_field(
-        'start_tm',
-        'tm'
-    ).rename_field(
-        'build_version',
-        'build'
-    ),
-    transformMatchData
-)
+print('Transform Arena Matches to Output...')
+outputMatchData = validArenaMatchViews.select(
+    'id',
+    'start_tm',
+    'build_version',
+    to_json(struct('instance_id', 'arena_type', 'winning_team_id', 'match_duration_seconds', 'new_ratings')).alias('info')
+).withColumnRenamed(
+    'build_version',
+    'build'
+).withColumnRenamed(
+    'start_tm',
+    'tm'
+).withColumn(
+    'match_type',
+    lit('arena')
+).na.drop()
 
-# For the match combatant table, we want to insert a new row for each combatant in each match of
+# Write match data and combatant data to redshift.
+print('Write Arena Match Data...', outputMatchData.count())
+glueContext.write_dynamic_frame.from_catalog(
+    frame=DynamicFrame.fromDF(outputMatchData, glueContext, 'outputMatchData'),
+    database='squadov-glue-database', 
+    table_name="squadov_public_wow_matches", 
+    redshift_tmp_dir=args['TempDir'], 
+    additional_options={'aws_iam_role': args['IamRole']})
+
+# For the match combatant table, we want to insert a new row for each combatant in each match
+print('Get WoW Match Characters...')
 wowMatchCharacters = glueContext.create_dynamic_frame.from_catalog(
     database='squadov-glue-database',
-    table_name='squadov_squadov_wow_match_view_character_presence')
+    table_name='squadov_squadov_wow_match_view_character_presence',
+    transformation_ctx='wowMatchCharacters',
+    additional_options = {"jobBookmarkKeys":['character_id'],'jobBookmarkKeysSortOrder':'asc'}
+).toDF()
 
-# First, we want to get the valid characters with combatant infos (they will have the 'has_combatant_info' flag checked).
-validMatchCharacters = Join.apply(
-    wowMatchViews,
+# First, we want to get the valid characters with combatant infos.
+print('Join characters to arena views...')
+validMatchCharacters = validArenaMatchViews.join(
     wowMatchCharacters,
+    validArenaMatchViews['id'] == wowMatchCharacters['view_id'],
+    'inner'
+).select(
     'id',
-    'view_id'
-).filter(
-    lambda x: x['has_combatant_info']
+    'character_id',
+    'unit_guid'
 )
 
 # Next we need to make sure all the combatant info is transformed into the proper format (aka only having 1 row per combatant).
-from pyspark.sql.functions import collect_list, struct
-
-vmcDf = validMatchCharacters.toDF()
-
-wowCombatantInfo = Join.apply(
-    validMatchCharacters,
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_match_view_combatants'),
+print('Get WoW Match Combatants...')
+wowMatchCombatants = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_match_view_combatants',
+    transformation_ctx='wowMatchCombatants',
+    additional_options = {"jobBookmarkKeys":['event_id'],'jobBookmarkKeysSortOrder':'asc'}
+).toDF().select(
     'character_id',
-    'character_id'
+    'team',
+    'spec_id',
+    'rating',
+    'class_id'
+)
+
+print('Join Combatant Info...')
+joinedCombatantInfo = wowMatchCombatants.join(
+    validMatchCharacters,
+    wowMatchCombatants['character_id'] == validMatchCharacters['character_id'],
+    'inner'
+).drop(wowMatchCombatants['character_id'])
+
+print('Get WoW Match Combatant Covenants...')
+wowCombatantCovenants = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_match_view_combatant_covenants'
 ).toDF()
 
-wowCombatantCovenants = Join.apply(
+print('Join Combatant Covenants...')
+joinedCombatantCovenants = wowCombatantCovenants.join(
     validMatchCharacters,
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_match_view_combatant_covenants'),
-    'character_id',
-    'character_id'
-).toDF().groupBy('character_id').agg(collect_list(struct('covenant_id', 'soulbind_id', 'soulbind_traits', 'conduit_item_ids', 'conduit_item_ilvls')).alias('covenant'))
+    wowCombatantCovenants['character_id'] == validMatchCharacters['character_id'],
+    'inner'
+).drop(validMatchCharacters['character_id']).groupBy('character_id').agg(to_json(collect_list(struct('covenant_id', 'soulbind_id', 'soulbind_traits', 'conduit_item_ids', 'conduit_item_ilvls'))).alias('covenant'))
 
-wowCombatantItems = Join.apply(
+print('Get WoW Match Combatant Items...')
+wowCombatantItems = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_match_view_combatant_items'
+).toDF()
+
+print('Join Combatant Items...')
+joinedCombatantItems = wowCombatantItems.join(
     validMatchCharacters,
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_match_view_combatant_items'),
-    'character_id',
-    'character_id'
-).toDF().groupBy('character_id').agg(collect_list(struct('idx', 'item_id', 'ilvl')).alias('items'))
+    wowCombatantItems['character_id'] == validMatchCharacters['character_id'],
+    'inner'
+).drop(validMatchCharacters['character_id']).groupBy('character_id').agg(to_json(collect_list(struct('idx', 'item_id', 'ilvl'))).alias('items'))
 
-wowCombatantTalents = Join.apply(
+print('Get WoW Match Combatant Talents...')
+wowCombatantTalents = glueContext.create_dynamic_frame.from_catalog(
+    database='squadov-glue-database',
+    table_name='squadov_squadov_wow_match_view_combatant_talents'
+).toDF()
+
+print('Join Combatant Talents...')
+joinedCombatantTalents = wowCombatantTalents.join(
     validMatchCharacters,
-    glueContext.create_dynamic_frame.from_catalog(
-        database='squadov-glue-database',
-        table_name='squadov_squadov_wow_match_view_combatant_talents'),
-    'character_id',
-    'character_id'
-).toDF().groupBy('character_id').agg(collect_list(struct('talent_id', 'is_pvp')).alias('talents'))
+    wowCombatantTalents['character_id'] == wowCombatantTalents['character_id'],
+    'inner'
+).drop(validMatchCharacters['character_id']).groupBy('character_id').agg(to_json(collect_list(struct('talent_id', 'is_pvp'))).alias('talents'))
 
-outputMatchCombatantData = DynamicFrame.fromDF(vmcDf.join(
-   wowCombatantInfo,
-   vmcDf['character_id'] == wowCombatantInfo['character_id'],
-   'inner'
-).join(
-    wowCombatantCovenants,
-    vmcDf['character_id'] == wowCombatantCovenants['character_id'],
+joinedCombatantInfo.printSchema()
+joinedCombatantCovenants.printSchema()
+joinedCombatantItems.printSchema()
+joinedCombatantTalents.printSchema()
+
+print('Join Combatant <> Covenant...')
+st1 = joinedCombatantInfo.join(
+    joinedCombatantCovenants,
+    joinedCombatantInfo['character_id'] == joinedCombatantCovenants['character_id'],
     'left'
-).join(
-    wowCombatantItems,
-    vmcDf['character_id'] == wowCombatantItems['character_id'],
+).drop(joinedCombatantCovenants['character_id'])
+
+print('Join Combatant <> Items')
+st2 = st1.join(
+    joinedCombatantItems,
+    st1['character_id'] == joinedCombatantItems['character_id'],
     'left'
-).join(
-    wowCombatantTalents,
-    vmcDf['character_id'] == wowCombatantTalents['character_id'],
+).drop(joinedCombatantItems['character_id'])
+
+print('Join Combatant <> Talents')
+st3 = st2.join(
+    joinedCombatantTalents,
+    st2['character_id'] == joinedCombatantTalents['character_id'],
     'left'
-),
-    glueContext,
-    'outputMatchCombatantData'
-).select_fields([
+).drop(joinedCombatantTalents['character_id'])
+
+st3.printSchema()
+print('Select Combatant Columns for Output')
+outputMatchCombatantData = st3.select(
     'id',
     'unit_guid',
     'spec_id',
@@ -173,8 +205,17 @@ outputMatchCombatantData = DynamicFrame.fromDF(vmcDf.join(
     'items',
     'talents',
     'covenant'
-])
+)
+outputMatchCombatantData.printSchema()
+print('...Post Select')
 
-# Write match data and combatant data to redshift.
+print('Write Combatant Match Data...')
+glueContext.write_dynamic_frame.from_catalog(
+    frame=DynamicFrame.fromDF(outputMatchCombatantData, glueContext, 'outputMatchCombatantData'),
+    database='squadov-glue-database', 
+    table_name="squadov_public_wow_match_combatants", 
+    redshift_tmp_dir=args['TempDir'], 
+    additional_options={'aws_iam_role': args['IamRole']})
 
+print('Commit Job...')
 job.commit()
