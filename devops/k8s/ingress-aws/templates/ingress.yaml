@@ -61,9 +61,20 @@ spec:
                     name: internal-app-service
                     port:
                         number: 3000
+        - host: "devapi.{{ .Values.domainPrefix }}squadov.gg"
+          http:
+            paths:
+            - path: /
+              pathType: Prefix
+              backend:
+                service:
+                    name: internal-devapi-service
+                    port:
+                        number: 8080
     tls:
         - hosts:
             - "auth.{{ .Values.domainPrefix }}squadov.gg"
             - "eagle.{{ .Values.domainPrefix }}squadov.gg"
             - "api.{{ .Values.domainPrefix }}squadov.gg"
             - "app.{{ .Values.domainPrefix }}squadov.gg"
+            - "devapi.{{ .Values.domainPrefix }}squadov.gg"

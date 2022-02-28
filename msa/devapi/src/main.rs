@@ -3,7 +3,7 @@ mod shared;
 mod auth;
 mod api;
 
-use actix_web::{web, App, HttpServer, Result};
+use actix_web::{web, App, HttpServer, Result, HttpResponse};
 use actix_web::middleware::{Logger, Compress};
 use actix_files::NamedFile;
 use std::{
@@ -23,6 +23,10 @@ pub async fn docs_page() -> Result<NamedFile> {
     let parent_dir: String = std::env::var_os("DASHBOARD_PAGE_DIR").unwrap_or(OsString::from("msa/devapi/ui/dashboard")).into_string().unwrap();
     let index_file: PathBuf = format!("{}/doc.html", &parent_dir).parse()?;
     Ok(NamedFile::open(index_file)?)
+}
+
+async fn health_check() -> Result<HttpResponse> {
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[tokio::main]
@@ -68,6 +72,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("")
                     .route("/swagger/v3/openapi.yml", web::get().to(openapi::openapi_v3))
                     .route("/oauth", web::get().to(auth::oauth::oauth_handler))
+                    .route("/healthz", web::get().to(health_check))
                     .route("/", web::get().to(landing_page))
             )
     })
