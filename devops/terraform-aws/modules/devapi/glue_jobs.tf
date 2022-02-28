@@ -50,3 +50,13 @@ resource "aws_glue_job" "transfer_wow_arenas" {
         "--spark-event-logs-path" = "s3://${aws_s3_bucket.glue_tmp_job_bucket.id}/spark-ui"
     }
 }
+
+resource "aws_glue_trigger" "trigger_wow_arenas" {
+    name = "trigger-wow-arenas"
+    schedule = "cron(0 5 * * ? *)"
+    type = "SCHEDULED"
+
+    actions {
+        job_name = aws_glue_job.transfer_wow_arenas.name
+    }
+}
