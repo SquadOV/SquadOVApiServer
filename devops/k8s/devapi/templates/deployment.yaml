@@ -41,7 +41,7 @@ spec:
                     - name: SQUADOV_FA_CLIENT_SECRET
                       valueFrom:
                         secretKeyRef:
-                            name: fusionauth-secret
+                            name: fusionauth-client-secret
                             key: devapi
                     - name: SQUADOV_SELF_HOST
                       value: "devapi.squadov.gg"
