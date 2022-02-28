@@ -1,0 +1,25 @@
+[package]
+name = "devapi"
+version = "0.1.0"
+authors = ["GRCHive, Inc. <mike@squadov.gg>"]
+edition = "2018"
+
+[dependencies]
+actix-service = "2.0.2"
+actix-web = "4.0.0"
+actix-files = "0.6.0"
+tokio = { version = "1.17.0", features = ["full"] }
+env_logger = "0.9.0"
+config = "0.12.0"
+serde = { version = "1.0.136", features = ["derive"] }
+sqlx = { version = "0.5.10", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+log = "0.4.0"
+futures = "0.3.13"
+reqwest = { version = "0.11.9", features = ["json"] }
+chrono = { version = "0.4.19", features = ["serde"] }
+deadpool-postgres = { version = "0.10.1", features = ["serde", "rt_tokio_1"] }
+tokio-postgres = { version = "0.7.5", features = ["with-uuid-0_8", "with-chrono-0_4", "with-serde_json-1"] }
+native-tls = "0.2.8"
+postgres-native-tls = "0.5.0"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
+serde_json = "1.0.79"

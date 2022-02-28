@@ -7,7 +7,8 @@ members = [
     "tools/wow_match_transfer",
     "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
-    "msa/csgo_demo_handler"
+    "msa/csgo_demo_handler",
+    "msa/devapi"
 ]
 default-members = [
     "server",
@@ -17,6 +18,7 @@ default-members = [
     "tools/wow_match_transfer",
     "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
-    "msa/csgo_demo_handler"
+    "msa/csgo_demo_handler",
+    "msa/devapi"
 ]
 exclude = ["deps/cargo/rust-petname", "deps/cargo/sqlx"]

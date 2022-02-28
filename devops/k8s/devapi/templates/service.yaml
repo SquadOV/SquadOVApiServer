@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+    name: internal-devapi-service
+    labels:
+        task: devapi
+spec:
+    type: NodePort
+    ports:
+        - port: 8080
+          protocol: TCP
+    selector:
+        task: devapi

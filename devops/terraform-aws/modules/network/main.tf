@@ -37,6 +37,22 @@ resource "aws_security_group" "database_security_group" {
         cidr_blocks = ["0.0.0.0/0"]
     }
 
+    ingress {
+        description = "Redshift connections."
+        from_port = 5439
+        to_port = 5439
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
+        description = "Internal"
+        from_port = 0
+        to_port = 0
+        protocol = "-1"
+        self = true
+    }
+
     egress {
         from_port = 0
         to_port = 0
@@ -61,17 +77,18 @@ resource "aws_subnet" "k8s_subnet_public_a" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2a"
     cidr_block = "10.0.2.0/28"
-    
-    tags = {
-        "kubernetes.io/cluster/primary-eks-cluster" = "shared"
-        "kubernetes.io/role/elb" = "1"
-    }
 }
 
 resource "aws_subnet" "k8s_subnet_public_c" {
     vpc_id = aws_vpc.primary.id
     availability_zone = "us-east-2c"
     cidr_block = "10.0.2.32/28"
+}
+
+resource "aws_subnet" "k8s_subnet_public_a_v2" {
+    vpc_id = aws_vpc.primary.id
+    availability_zone = "us-east-2a"
+    cidr_block = "10.0.3.0/24"
     
     tags = {
         "kubernetes.io/cluster/primary-eks-cluster" = "shared"
@@ -79,6 +96,16 @@ resource "aws_subnet" "k8s_subnet_public_c" {
     }
 }
 
+resource "aws_subnet" "k8s_subnet_public_c_v2" {
+    vpc_id = aws_vpc.primary.id
+    availability_zone = "us-east-2c"
+    cidr_block = "10.0.4.0/24"
+    
+    tags = {
+        "kubernetes.io/cluster/primary-eks-cluster" = "shared"
+        "kubernetes.io/role/elb" = "1"
+    }
+}
 
 resource "aws_eip" "primary_nat_eip_a" {
     vpc = true
@@ -92,6 +119,18 @@ resource "aws_nat_gateway" "primary_nat_a" {
     depends_on = [ aws_internet_gateway.primary_gateway ]
 }
 
+resource "aws_eip" "primary_nat_eip_a_v2" {
+    vpc = true
+}
+
+resource "aws_nat_gateway" "primary_nat_a_v2" {
+    allocation_id = aws_eip.primary_nat_eip_a_v2.id
+    connectivity_type = "public"
+    subnet_id = aws_subnet.k8s_subnet_public_a_v2.id
+
+    depends_on = [ aws_internet_gateway.primary_gateway ]
+}
+
 resource "aws_eip" "primary_nat_eip_c" {
     vpc = true
 }
@@ -100,6 +139,18 @@ resource "aws_nat_gateway" "primary_nat_c" {
     allocation_id = aws_eip.primary_nat_eip_c.id
     connectivity_type = "public"
     subnet_id = aws_subnet.k8s_subnet_public_c.id
+
+    depends_on = [ aws_internet_gateway.primary_gateway ]
+}
+
+resource "aws_eip" "primary_nat_eip_c_v2" {
+    vpc = true
+}
+
+resource "aws_nat_gateway" "primary_nat_c_v2" {
+    allocation_id = aws_eip.primary_nat_eip_c_v2.id
+    connectivity_type = "public"
+    subnet_id = aws_subnet.k8s_subnet_public_c_v2.id
 
     depends_on = [ aws_internet_gateway.primary_gateway ]
 }
@@ -145,6 +196,16 @@ resource "aws_route_table_association" "k8s_public_rt_subnet_c" {
     subnet_id = aws_subnet.k8s_subnet_public_c.id
 }
 
+resource "aws_route_table_association" "k8s_public_rt_subnet_a_v2" {
+    route_table_id = aws_route_table.public_route_table.id
+    subnet_id = aws_subnet.k8s_subnet_public_a_v2.id
+}
+
+resource "aws_route_table_association" "k8s_public_rt_subnet_c_v2" {
+    route_table_id = aws_route_table.public_route_table.id
+    subnet_id = aws_subnet.k8s_subnet_public_c_v2.id
+}
+
 resource "aws_vpc_endpoint" "s3_endpoint_us_east_2" {
     vpc_id = aws_vpc.primary.id
     service_name = "com.amazonaws.us-east-2.s3"
@@ -176,6 +237,11 @@ resource "aws_vpc_endpoint_route_table_association" "s3_private_rt_a" {
 
 resource "aws_vpc_endpoint_route_table_association" "s3_private_rt_c" {
     route_table_id = aws_route_table.private_route_table_c.id
+    vpc_endpoint_id = aws_vpc_endpoint.s3_endpoint_us_east_2.id
+}
+
+resource "aws_vpc_endpoint_route_table_association" "s3_public_rt" {
+    route_table_id = aws_route_table.public_route_table.id
     vpc_endpoint_id = aws_vpc_endpoint.s3_endpoint_us_east_2.id
 }
 

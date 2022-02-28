@@ -1,0 +1,314 @@
+openapi: 3.0.0
+info:
+  title: SquadOV Developer API
+  description: >
+    Documentation for the SquadOV Developer API which lets you access aggregate (TODO)
+    and raw (limited) game data collected from SquadOV users.
+  version: 0.0.1
+servers:
+  - url: https://devapi.squadov.gg/api
+    description: Primary API endpoint
+paths:
+  /raw/{game}:
+    post:
+      tags:
+        - Raw Match Data
+      summary: Ability to access limited raw match data in bulk.
+      description: >
+        All raw match data can be accessed via this endpoint.
+        Note that you are restricted to collecting bulk data from a time period of less than 24 hours.
+      operationId: getRawMatchData
+      parameters:
+        - name: game
+          in: path
+          description: Game identifier
+          required: true
+          schema:
+            type: string
+            enum: [wow]
+      requestBody:
+        description: >
+          Parameters to determine what matches to return.
+          Choose the appropriate request body based on the value of `game`.
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/RawWowRequest'
+      responses:
+        '200':
+          description: Valid data returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/RawWowResponse'
+        '400':
+          description: An improper value was sent to the server. Check that the times are formatted correctly and that enums are chosen properly.
+        '500':
+          description: We fucked up. Please contact us to tell us something went wrong.
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-squadov-api-key
+  schemas:
+    CommonRawRequest:
+      type: object
+      properties:
+        startTm:
+          type: string
+          format: date-time
+          example: 2017-07-21T17:32:28Z
+          description: >
+            The RFC 3339 formatted date-time at which to start pulling data. 
+        endTm:
+          type: string
+          format: date-time
+          example: 2017-07-21T17:32:28Z
+          description: >
+            The RFC 3339 formatted date-time at which to stop pulling data.
+            Must be less than 24 hours after the start time.
+      required:
+        - startTm
+        - endTm
+    WowArenaType:
+      type: string
+      enum: [Skirmish, 5v5, Rated BG, 3v3, 2v2]
+    RawWowRequest:
+      allOf:
+        - $ref: '#/components/schemas/CommonRawRequest'
+        - type: object
+          properties:
+            mode:
+              type: string
+              enum: [arena]
+              description: Which WoW instance type to retrieve data for. This is not case sensitive.
+            release:
+              type: string
+              enum: [retail, vanilla, tbc]
+              description: Which WoW release to retrieve data for. This is not case sensitive.
+            patch:
+              type: string
+              description: >
+                A regex expression to run on the WoW build version, and we will only return matches run on this patch.
+                Use this only if you require more precise control over the data than provided by `release`.
+              example:
+                retail:
+                  value: ^9.*
+                  summary: Any game played on WoW Shadowlands.
+                tbc:
+                  value: ^2.*
+                  summary: Any game played on WoW TBC.
+              nullable: true
+            bracket:
+              description: >
+                Required only when `mode` is set to `arena`.
+                Corresponds to the arena type output to the WoW combat log on `ARENA_MATCH_START` lines.
+                This is not case sensitive.
+              $ref: '#/components/schemas/WowArenaType'
+          required:
+            - mode
+            - release
+            - bracket
+    RawWowResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 751d075a-332a-40f6-87ce-b23c8b61fc2f
+          description: A UUID that uniquely identifies the match on the SquadOV servers.
+        tm:
+          type: string
+          format: date-time
+          example: 2017-07-21T17:32:28Z
+          description: >
+            The RFC 3339 formatted date-time at which the game started.
+        build:
+          type: string
+          example: 9.1.5
+          description: The WoW patch number the game was played on.
+        info:
+          description: Choose the appropriate schema based on the `mode` of the WoW match requested.
+          oneOf:
+            - $ref: '#/components/schemas/RawWowArenaInfo'
+        combatants:
+          type: array
+          items:
+            $ref: '#/components/schemas/WowCombatantInfo'
+          description: An array containing all the combatants who participated in this match.
+      required:
+        - id
+        - tm
+        - build
+        - info
+        - combatants
+    WowCombatantInfo:
+      type: object
+      properties:
+        playerGuid:
+          type: string
+          description: A unique ID that identifies the player in the combat log.
+        specId:
+          type: integer
+          description: >
+            The spec the player is playing.
+            This is the guessed class ID for non-retail games.
+        classId:
+          type: integer
+          description: >
+            The class the player is playing.
+            You should generally not trust this information as we guess the class from spells cast.
+            If possible, use `specId` instead.
+          nullable: true
+        rating:
+          type: integer
+          description: The user's arena rating before the game started. Will be 0 for skirmishes and non-arena games.
+        team:
+          type: integer
+          description: The user's team ID. Only relevant for arenas and will correspond to `winningTeamId` if the user won.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/WowCombatantItem'
+        talents:
+          type: array
+          items:
+            $ref: '#/components/schemas/WowCombatantTalent'
+        covenant:
+          type: array
+          description: If the covenant is relevant, this should only ever be an array of 1 item.
+          items:
+            $ref: '#/components/schemas/WowCombatantCovenant'
+    WowCombatantCovenant:
+      type: object
+      properties:
+        covenantId:
+          type: integer
+          description: The user's chosen covenant.
+        soulbindId:
+          type: integer
+          description: The user's chosen soulbind.
+        soulbindTraits:
+          type: array
+          items:
+            type: integer
+          description: I'll be honest, it's been a hot minute and I don't remember what this is.
+        conduitItemIds:
+          type: array
+          items:
+            type: integer
+          description: I'll be honest, it's been a hot minute and I don't remember what this is.
+        conduitItemIlvls:
+          type: array
+          items:
+            type: integer
+          description: I'll be honest, it's been a hot minute and I don't remember what this is.
+    WowCombatantTalent:
+      type: object
+      properties:
+        talentId:
+          type: integer
+          description: The ID of the talent equipped.
+        isPvp:
+          type: boolean
+          description: Whether or not this is a PVP talent.
+    WowCombatantItem:
+      type: object
+      properties:
+        idx:
+          type: integer
+          description: >
+            The "index" of the item.
+            We determine what item slot the item fits in based off of the index.
+            Example of code to parse this value is shown as follows:
+
+            ```
+            export function wowItemSlotToName(slot: number): string {
+              switch (slot) {
+                  case 0:
+                      return 'Unequippable'
+                  case 1:
+                      return 'Head'
+                  case 2:
+                      return 'Neck'
+                  case 3:
+                      return 'Shoulder'
+                  case 4:
+                      return 'Shirt'
+                  case 5: 
+                  case 20:
+                      return 'Chest'
+                  case 6:
+                      return 'Waist'
+                  case 7:
+                      return 'Legs'
+                  case 8:
+                      return 'Feet'
+                  case 9:
+                      return 'Wrist'
+                  case 10:
+                      return 'Hands'
+                  case 11:
+                      return 'Finger'
+                  case 12:
+                      return 'Trinket'
+                  case 13:
+                      return 'One-Hand'
+                  case 14:
+                  case 22:
+                  case 23:
+                      return 'Off Hand'
+                  case 15:
+                  case 26:
+                      return 'Ranged'
+                  case 16:
+                      return 'Back'
+                  case 17:
+                      return 'Two-Hand'
+                  case 18:
+                      return 'Bag'
+                  case 19:
+                      return 'Tabard'
+                  case 21:
+                      return 'Main Hand'
+                  case 24:
+                      return 'Ammo'
+                  case 25:
+                      return 'Thrown'
+              }
+              return 'Unknown Slot'
+            }
+            ```
+        itemId:
+          type: integer
+          description: >
+            The ID of the item equipped.
+        ilvl:
+          type: integer
+          description: The item level of the equipped item.
+    RawWowArenaInfo:
+      type: object
+      properties:
+        instanceId:
+          type: integer
+          description: The map instance ID the match was played on.
+        arenaType:
+          $ref: '#/components/schemas/WowArenaType'
+        winningTeamId:
+          type: integer
+          description: The team ID that won this match.
+        matchDurationSeconds:
+          type: number
+          description: How long the match lasted in seconds.
+      required:
+        - instanceId
+        - arenaType
+        - winningTeamId
+        - matchDurationSeconds

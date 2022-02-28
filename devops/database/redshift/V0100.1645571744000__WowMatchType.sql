@@ -1,0 +1,2 @@
+ALTER TABLE wow_matches
+ADD COLUMN match_type VARCHAR NOT NULL DEFAULT '';

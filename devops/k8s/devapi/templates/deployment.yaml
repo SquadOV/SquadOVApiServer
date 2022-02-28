@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: devapi
+    labels:
+        task: devapi
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            task: devapi
+    template:
+        metadata:
+            labels:
+                task: devapi
+        spec:
+            containers:
+                - name: devapi
+                  image: registry.gitlab.com/squadov/squadovapiserver/{{ .Values.environment }}/devapi:{{ .Values.commitHash }}
+                  env:
+                    - name: SQUADOV_DB_USERNAME
+                      valueFrom:
+                        secretKeyRef:
+                            name: postgres-secret
+                            key: username
+                    - name: SQUADOV_DB_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                            name: postgres-secret
+                            key: password
+                    - name: SQUADOV_DB_CONNECTIONS
+                      value: "16"
+                    - name: SQUADOV_DB_ENDPOINT
+                      value: "squadov-postgres-primary.ccy90hcqnqbc.us-east-2.rds.amazonaws.com"
+                    - name: SQUADOV_FA_URL
+                      value: "https://auth.squadov.gg"
+                    - name: SQUADOV_FA_TENANT_ID
+                      value: "d6a9294d-bd5a-def1-1077-83aeca0a6764"
+                    - name: SQUADOV_FA_CLIENT_ID
+                      value: "36506611-9fc6-4f7a-a3e4-b9df09d9da8e"
+                    - name: SQUADOV_FA_CLIENT_SECRET
+                      valueFrom:
+                        secretKeyRef:
+                            name: fusionauth-client-secret
+                            key: devapi
+                    - name: SQUADOV_SELF_HOST
+                      value: "devapi.squadov.gg"
+                    - name: SQUADOV_SELF_SCHEMA
+                      value: "https"
+                    - name: SQUADOV_REDSHIFT_ENDPOINT
+                      value: "squadov-rs-cluster.cfg5xnceaufw.us-east-2.redshift.amazonaws.com"
+                    - name: SQUADOV_REDSHIFT_USERNAME
+                      valueFrom:
+                        secretKeyRef:
+                            name: redshift-secret
+                            key: username
+                    - name: SQUADOV_REDSHIFT_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                            name: redshift-secret
+                            key: username
+                  ports:
+                    - containerPort: 8080
+                  livenessProbe:
+                    httpGet:
+                        path: /healthz
+                        port: 8080
+                    initialDelaySeconds: 10
+                    periodSeconds: 20
+                    timeoutSeconds: 10
+                  readinessProbe:
+                    httpGet:
+                        path: /healthz
+                        port: 8080
+                    initialDelaySeconds: 10
+                    periodSeconds: 20
+                    timeoutSeconds: 10
+                  resources:
+                    requests:
+                        cpu: "250m"
+                        memory: "0.5Gi"
+            imagePullSecrets:
+                - name: regcred

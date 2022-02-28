@@ -1,0 +1,41 @@
+FROM debian:buster-20200908-slim AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    ca-certificates \
+    build-essential \
+    openssl \ 
+    libssl-dev \
+    pkg-config \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /squadov/config
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup toolchain install 1.58.0 && rustup default 1.58.0
+
+COPY lib /squadov/lib
+COPY server /squadov/server
+COPY tools /squadov/tools
+COPY deps /squadov/deps
+COPY msa /squadov/msa
+COPY Cargo.toml /squadov/
+COPY Cargo.lock /squadov/
+COPY devops/gcp /squadov/gcp
+
+WORKDIR /squadov
+RUN cargo build --release --bin devapi
+
+FROM debian:buster-20200908-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /squadov/data
+WORKDIR /squadov
+COPY --from=builder /squadov/target/release/devapi .
+COPY msa/devapi/ui /squadov/data/ui
+COPY msa/devapi/openapi/devapi.yml /squadov/data/devapi.yml
+ENV LANDING_PAGE_DIR=/squadov/data/ui/landing
+ENV DASHBOARD_PAGE_DIR=/squadov/data/ui/dashboard
+ENV OPENAPI_FILE=/squadov/data/devapi.yml
+COPY run_devapi.sh ./
+ENTRYPOINT ["./run_devapi.sh"]

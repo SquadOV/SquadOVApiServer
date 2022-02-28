@@ -43,6 +43,7 @@ module "db" {
     postgres_instance_type = "db.m6g.8xlarge"
     postgres_db_subnets = module.network.database_subnets
     postgres_db_security_groups = module.network.database_security_groups
+    glue_subnet = module.network.private_k8s_subnets[0]
 
     redis_instance_type = "cache.t4g.medium"
 }
@@ -60,4 +61,18 @@ module "k8s" {
     public_k8s_subnets = module.network.public_k8s_subnets
     private_k8s_subnets = module.network.private_k8s_subnets
     default_fargate_subnets = module.network.default_fargate_subnets
+}
+
+module "devapi" {
+    source = "../modules/devapi"
+
+    redshift_user = var.redshift_user
+    redshift_password = var.redshift_password
+    redshift_subnets = module.network.database_subnets
+    redshift_security_groups = module.network.database_security_groups
+    db_glue_connection_name = module.db.rds_glue_connection_name
+    glue_subnet = module.network.private_k8s_subnets[0]
+    bucket_suffix = "-prod"
+    db_secret_id = module.db.db_secret_id
+    db_endpoint = module.db.db_endpoint
 }

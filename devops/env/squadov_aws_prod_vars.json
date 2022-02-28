@@ -52,6 +52,10 @@
 	"DISCORD_CLIENT_SECRET": "ENC[AES256_GCM,data:QC5TlgtZq9DZwKz0xt3X0UizU3CiAvnpASChF/oCG9Y=,iv:TjL6rFI0P+HpmHSOAQG58s4fODoaHhiEy9HjsBC5C08=,tag:1OIcLGtjD+KF/4vK+/VDKA==,type:str]",
 	"DEFAULT_SPEED_CHECK_BUCKET": "ENC[AES256_GCM,data:oGYKn/bBTDSBRlOGS2+K96iG3HoIIWDRhCeSOaN1COzRZUhexC6J,iv:QkZHuZajsiowRkRZIEx2f0LH73WqLTSyn8nr/7ZXc0U=,tag:XzqS+OIM7PtzTH0hW1cVvw==,type:str]",
 	"REDIS_URL": "ENC[AES256_GCM,data:Lpqwed+jGLWqYKw9O5Utl7PI5SetWeAAhKvrmrhqANVjR7bSNCAC47kx3HURDrguGr8=,iv:d09OM9v4Wbv2/607O6uqT8QDmJ186+jkNouiEVRKM0s=,tag:XTMph2Y2YnNSk5OcZTeBhg==,type:str]",
+	"REDSHIFT_USER": "ENC[AES256_GCM,data:NLoeKrm2eH71cTDcCJDV,iv:BYp+CQqMZWvRyDYB+S2ljvOTKQvBgeStUQ8XefpXxis=,tag:pp80QdpIxdsW3Vy+1LvfiQ==,type:str]",
+	"REDSHIFT_PASSWORD": "ENC[AES256_GCM,data:VLXNkVGQvA3Np1IvnnSWsw==,iv:5QuFLHnA52SLKCoX3dkOl7fGnpb2GQFgY8fiuxjrGtU=,tag:AeEVU+DWVyeeiIufsxRS+Q==,type:str]",
+	"REDSHIFT_HOST": "ENC[AES256_GCM,data:unSdrcI3IHVdWdvj5b3dX43BHXNl5cBTTpeE/x1irR+eM7rFyI6Onwbr8ucR2AhrOVHqtFi8RmGCTw31Wf0ToQ==,iv:IoHTuUFUnzKA9xZgM4EGt+FMNUymMKEPCxQ599y0BvY=,tag:Z3QIo6kZz3nDXvTKmbCozQ==,type:str]",
+	"FUSIONAUTH_DEVAPI_SECRET": "ENC[AES256_GCM,data:3J2GVf/9vwIDUebkwpJdrx+XYevu83zZudndkXK9SRRseNPUYGcDLrbifg==,iv:+C46gsyS8xH7s69dD21UOO70Vo2OcDKAQ8TEZnb6sn0=,tag:7d/1FCRO4AJpoLOW1Bxs0w==,type:str]",
 	"sops": {
 		"kms": null,
 		"gcp_kms": [
@@ -63,8 +67,8 @@
 		],
 		"azure_kv": null,
 		"hc_vault": null,
-		"lastmodified": "2022-01-15T19:05:08Z",
-		"mac": "ENC[AES256_GCM,data:eag4/oFn14LXgGKyqW8iJXXCsr2FdSBkyHkm+abiaSvy6mPGVY3rs9IztGKzeBCzSRPQfiyEXBoxhxy5cjW5MVG+g7NeOUcfcIYKpOWxQJt2zLFPrOkkPx0W6dE9hyoB6dfXCazCz7xsoGO3diVAuRoXR77YtBGBJMVak/SP23E=,iv:afghIwEMgqggArU6ES5ovQ3oF5XfxhqsCKWHs7AT5po=,tag:yJIaffwGM9oI6bE9RwslJA==,type:str]",
+		"lastmodified": "2022-02-28T19:46:45Z",
+		"mac": "ENC[AES256_GCM,data:vIwV92joJteUAKtcMSXG1716nScPcwTIYxFMOWeEMrGbr6+epeg2jq0uaa5NVfA7d+nbuELX+eLQDmV3fVRm4C6iGw+J3BzDFDtnuaPg8CG+HCrbVML5+t6NQHtbyJh5itGsufra4Ou3lXxFAHkgWgdp3BQa96mmfmD6jVgM1zk=,iv:Ij6M75O2DW1KysY1dfWwA0AojOcYDemacFQosvhclJI=,tag:WRygH0y2LeqBqUNy4vKEmw==,type:str]",
 		"pgp": null,
 		"unencrypted_suffix": "_unencrypted",
 		"version": "3.6.1"
