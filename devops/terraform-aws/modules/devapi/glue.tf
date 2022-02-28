@@ -39,7 +39,8 @@ resource "aws_iam_policy" "glue_extra_policy" {
                 "s3:ListBucket",
                 "s3:GetObject",
                 "s3:PutObject",
-                "s3:DeleteObject"
+                "s3:DeleteObject",
+                "secretsmanager:Get*"
             ],
             "Resource": "*"
         }

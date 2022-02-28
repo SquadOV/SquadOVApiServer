@@ -6,6 +6,6 @@ use std::{
 };
 
 pub async fn openapi_v3() -> Result<NamedFile> {
-    let path: PathBuf = std::env::var_os("OPENAPI_FILE").unwrap_or(OsString::from("devops/openapi/devapi.yml")).into_string().unwrap().parse()?;
+    let path: PathBuf = std::env::var_os("OPENAPI_FILE").unwrap_or(OsString::from("msa/devapi/openapi/devapi.yml")).into_string().unwrap().parse()?;
     Ok(NamedFile::open(path)?)
 }

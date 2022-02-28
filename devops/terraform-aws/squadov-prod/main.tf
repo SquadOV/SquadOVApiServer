@@ -73,4 +73,6 @@ module "devapi" {
     db_glue_connection_name = module.db.rds_glue_connection_name
     glue_subnet = module.network.private_k8s_subnets[0]
     bucket_suffix = "-prod"
+    db_secret_id = module.db.db_secret_id
+    db_endpoint = module.db.db_endpoint
 }

@@ -25,3 +25,11 @@ variable "glue_subnet" {
 variable "bucket_suffix" {
     type = string
 }
+
+variable "db_secret_id" {
+    type = string
+}
+
+variable "db_endpoint" {
+    type = string
+}

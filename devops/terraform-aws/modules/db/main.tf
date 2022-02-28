@@ -179,6 +179,14 @@ resource "aws_secretsmanager_secret" "primary_db_credentials_secret" {
     name = "primary_db_credentials_secret"
 }
 
+output "db_secret_id" {
+    value = aws_secretsmanager_secret.primary_db_credentials_secret.id
+}
+
+output "db_endpoint" {
+    value = aws_db_instance.primary_db.endpoint
+}
+
 resource "aws_secretsmanager_secret_version" "primary_db_credentials_secret_ver" {
     secret_id     = aws_secretsmanager_secret.primary_db_credentials_secret.id
     secret_string = jsonencode({
