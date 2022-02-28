@@ -1,9 +1,10 @@
 mod openapi;
 mod shared;
 mod auth;
+mod api;
 
 use actix_web::{web, App, HttpServer, Result};
-use actix_web::middleware::{Logger};
+use actix_web::middleware::{Logger, Compress};
 use actix_files::NamedFile;
 use std::{
     path::PathBuf,
@@ -42,6 +43,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .wrap(Compress::default())
             .wrap(Logger::default())
             .app_data(web::Data::new(app.clone()))
             .service(
@@ -55,9 +57,10 @@ async fn main() -> std::io::Result<()> {
                 // Machine-facing protected endpoint.
                 // Authenticate using API key.
                 web::scope("/api")
+                    .wrap(auth::api::ApiAuth{app: app.clone()})
                     .service(
                         web::scope("/raw")
-                            .route("/wow")
+                            .route("/wow", web::post().to(api::raw::wow::raw_wow_handler))
                     )
             )
             .service(

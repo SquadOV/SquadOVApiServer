@@ -1660,6 +1660,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadpool"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf0c5365c0925c80a838a6810a1bf38d3304ca6b4eb25829e29e33da12de786"
+dependencies = [
+ "async-trait",
+ "deadpool-runtime",
+ "num_cpus",
+ "serde",
+ "tokio 1.17.0",
+]
+
+[[package]]
+name = "deadpool-postgres"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46ff1451a33b8b31b15eedcf5401dbbb28606caed4fa94d20487eb3fac2ebd04"
+dependencies = [
+ "deadpool 0.9.2",
+ "log",
+ "serde",
+ "tokio 1.17.0",
+ "tokio-postgres",
+]
+
+[[package]]
 name = "deadpool-redis"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1667,11 +1693,20 @@ checksum = "7655c3211e78315e7ee4b1ed8ce4a6fce0509deb4da8562dfb20d5fdfd4ad85c"
 dependencies = [
  "async-trait",
  "config 0.10.1",
- "deadpool",
+ "deadpool 0.5.2",
  "futures 0.3.13",
  "log",
  "redis",
  "serde",
+]
+
+[[package]]
+name = "deadpool-runtime"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaa37046cc0f6c3cc6090fbdbf73ef0b8ef4cfcc37f6befc0020f63e8cf121e1"
+dependencies = [
+ "tokio 1.17.0",
 ]
 
 [[package]]
@@ -1745,14 +1780,21 @@ dependencies = [
  "actix-files",
  "actix-service 2.0.2",
  "actix-web 4.0.1",
+ "chrono",
  "config 0.12.0",
+ "deadpool-postgres",
  "env_logger 0.9.0",
  "futures 0.3.13",
  "log",
+ "native-tls",
+ "postgres-native-tls",
  "reqwest 0.11.9",
  "serde",
+ "serde_json",
  "sqlx 0.5.11",
  "tokio 1.17.0",
+ "tokio-postgres",
+ "uuid",
 ]
 
 [[package]]
@@ -1781,6 +1823,7 @@ checksum = "f2fb860ca6fafa5552fb6d0e816a69c8e49f0908bf524e30a90d97c85892d506"
 dependencies = [
  "block-buffer 0.10.2",
  "crypto-common",
+ "subtle",
 ]
 
 [[package]]
@@ -1935,6 +1978,12 @@ name = "fake-simd"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
+
+[[package]]
+name = "fallible-iterator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
 name = "fastrand"
@@ -2390,6 +2439,15 @@ checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
 dependencies = [
  "crypto-mac 0.11.1",
  "digest 0.9.0",
+]
+
+[[package]]
+name = "hmac"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+dependencies = [
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -2942,6 +3000,15 @@ dependencies = [
  "block-buffer 0.9.0",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "md-5"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658646b21e0b72f7866c7038ab086d3d5e1cd6271f060fd37defb241949d0582"
+dependencies = [
+ "digest 0.10.3",
 ]
 
 [[package]]
@@ -3526,6 +3593,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fabbf1ead8a5bcbc20f5f8b939ee3f5b0f6f281b6ad3468b84656b658b455259"
+dependencies = [
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6796ad771acdc0123d2a88dc428b5e38ef24456743ddb1744ed628f9815c096"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
 name = "pin-project"
 version = "0.4.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3664,6 +3749,52 @@ dependencies = [
  "log",
  "wepoll-sys",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "postgres-native-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d442770e2b1e244bb5eb03b31c79b65bb2568f413b899eaba850fa945a65954"
+dependencies = [
+ "futures 0.3.13",
+ "native-tls",
+ "tokio 1.17.0",
+ "tokio-native-tls",
+ "tokio-postgres",
+]
+
+[[package]]
+name = "postgres-protocol"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79ec03bce71f18b4a27c4c64c6ba2ddf74686d69b91d8714fb32ead3adaed713"
+dependencies = [
+ "base64 0.13.0",
+ "byteorder",
+ "bytes 1.1.0",
+ "fallible-iterator",
+ "hmac 0.12.1",
+ "md-5 0.10.1",
+ "memchr",
+ "rand 0.8.4",
+ "sha2 0.10.2",
+ "stringprep",
+]
+
+[[package]]
+name = "postgres-types"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04619f94ba0cc80999f4fc7073607cb825bc739a883cb6d20900fc5e009d6b0d"
+dependencies = [
+ "bytes 1.1.0",
+ "chrono",
+ "fallible-iterator",
+ "postgres-protocol",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -4247,7 +4378,7 @@ dependencies = [
  "rusoto_credential",
  "rustc_version",
  "serde",
- "sha2",
+ "sha2 0.9.9",
  "time 0.2.22",
  "tokio 0.2.22",
 ]
@@ -4534,6 +4665,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha2"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55deaec60f81eefe3cce0dc50bda92d6d8e88f2a27df7c5033b42afeb1ed2676"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cpufeatures",
+ "digest 0.10.3",
+]
+
+[[package]]
 name = "shlex"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4559,6 +4701,12 @@ dependencies = [
  "num-bigint 0.2.6",
  "num-traits",
 ]
+
+[[package]]
+name = "siphasher"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a86232ab60fa71287d7f2ddae4a7073f6b7aac33631c3015abb556f08c6d0a3e"
 
 [[package]]
 name = "slab"
@@ -4672,7 +4820,7 @@ dependencies = [
  "libc",
  "log",
  "lru-cache",
- "md-5",
+ "md-5 0.9.1",
  "memchr",
  "num-bigint 0.2.6",
  "once_cell",
@@ -4682,7 +4830,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha-1 0.9.8",
- "sha2",
+ "sha2 0.9.9",
  "smallvec",
  "sqlformat",
  "sqlx-rt 0.1.1",
@@ -4722,7 +4870,7 @@ dependencies = [
  "itoa 1.0.1",
  "libc",
  "log",
- "md-5",
+ "md-5 0.9.1",
  "memchr",
  "num-bigint 0.3.3",
  "once_cell",
@@ -4732,7 +4880,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha-1 0.9.8",
- "sha2",
+ "sha2 0.9.9",
  "smallvec",
  "sqlformat",
  "sqlx-rt 0.5.11",
@@ -4756,7 +4904,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.9.9",
  "sqlx-core 0.4.0-beta.1",
  "sqlx-rt 0.1.1",
  "syn",
@@ -4778,7 +4926,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "sha2",
+ "sha2 0.9.9",
  "sqlx-core 0.5.11",
  "sqlx-rt 0.5.11",
  "syn",
@@ -4822,7 +4970,7 @@ dependencies = [
  "bytes 0.6.0",
  "chrono",
  "convert_case",
- "deadpool",
+ "deadpool 0.5.2",
  "deadpool-redis",
  "derive_more",
  "env_logger 0.7.1",
@@ -4851,7 +4999,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
- "sha2",
+ "sha2 0.9.9",
  "sqlx 0.4.0-beta.1",
  "squadov_common",
  "structopt",
@@ -4883,7 +5031,7 @@ dependencies = [
  "convert_case",
  "crc32c",
  "crossbeam",
- "deadpool",
+ "deadpool 0.5.2",
  "deadpool-redis",
  "derive_more",
  "env_logger 0.7.1",
@@ -4900,7 +5048,7 @@ dependencies = [
  "lapin",
  "lazy_static",
  "log",
- "md-5",
+ "md-5 0.9.1",
  "nom 6.0.1",
  "num_enum",
  "openssl",
@@ -4922,7 +5070,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "sha-1 0.9.8",
- "sha2",
+ "sha2 0.9.9",
  "sqlx 0.4.0-beta.1",
  "tempfile",
  "tokio 0.2.22",
@@ -5323,6 +5471,29 @@ checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
 dependencies = [
  "native-tls",
  "tokio 1.17.0",
+]
+
+[[package]]
+name = "tokio-postgres"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b6c8b33df661b548dcd8f9bf87debb8c56c05657ed291122e1188698c2ece95"
+dependencies = [
+ "async-trait",
+ "byteorder",
+ "bytes 1.1.0",
+ "fallible-iterator",
+ "futures 0.3.13",
+ "log",
+ "parking_lot 0.11.0",
+ "percent-encoding",
+ "phf",
+ "pin-project-lite 0.2.8",
+ "postgres-protocol",
+ "postgres-types",
+ "socket2 0.4.4",
+ "tokio 1.17.0",
+ "tokio-util 0.6.9",
 ]
 
 [[package]]

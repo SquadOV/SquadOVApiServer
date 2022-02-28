@@ -42,8 +42,14 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/RawWowResponse'
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/RawWowResponse'
+        '400':
+          description: An improper value was sent to the server. Check that the times are formatted correctly and that enums are chosen properly.
+        '500':
+          description: We fucked up. Please contact us to tell us something went wrong.
 security:
   - ApiKeyAuth: []
 components:
@@ -83,17 +89,17 @@ components:
             mode:
               type: string
               enum: [arena]
-              description: Which WoW instance type to retrieve data for.
+              description: Which WoW instance type to retrieve data for. This is not case sensitive.
             release:
               type: string
               enum: [retail, vanilla, tbc]
-              description: Which WoW release to retrieve data for.
+              description: Which WoW release to retrieve data for. This is not case sensitive.
             patch:
               type: string
               description: >
                 A regex expression to run on the WoW build version, and we will only return matches run on this patch.
                 Use this only if you require more precise control over the data than provided by `release`.
-              examples:
+              example:
                 retail:
                   value: ^9.*
                   summary: Any game played on WoW Shadowlands.
@@ -105,10 +111,12 @@ components:
               description: >
                 Required only when `mode` is set to `arena`.
                 Corresponds to the arena type output to the WoW combat log on `ARENA_MATCH_START` lines.
+                This is not case sensitive.
               $ref: '#/components/schemas/WowArenaType'
           required:
             - mode
             - release
+            - bracket
     RawWowResponse:
       type: object
       properties:
