@@ -4,7 +4,7 @@ use squadov_common::{
 };
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use std::sync::Arc;
 use serde::{Deserialize};
 use uuid::Uuid;

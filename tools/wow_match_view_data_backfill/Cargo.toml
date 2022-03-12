@@ -6,11 +6,11 @@ edition = "2018"
 
 [dependencies]
 squadov_common = { path="../../lib/squadov_common" }
-sqlx = { path="../../deps/cargo/sqlx", version = "0.4.0-beta.1", default-features = false, features = [ "bigdecimal", "runtime-async-std", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+sqlx = { version = "0.5.10", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
 log = "0.4.0"
 env_logger = "0.7.1"
 structopt = "0.3"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.15.0", features = ["full"] }
 toml = "0.5"
 serde = { version = "1.0.116", features = ["derive"] }
 chrono = { version = "0.4.19", features = ["serde"] }

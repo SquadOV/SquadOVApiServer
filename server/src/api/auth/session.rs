@@ -1,7 +1,7 @@
 use sqlx;
 use sqlx::postgres::PgPool;
 use sqlx::{Executor, Postgres};
-use actix_web::{ HttpRequest, FromRequest, dev, Error };
+use actix_web::{ HttpRequest, FromRequest, dev, Error, HttpMessage};
 use actix_web::error::ErrorUnauthorized;
 use futures_util::future::{ok, err, Ready};
 use squadov_common;
@@ -33,7 +33,6 @@ pub struct SquadOVSession {
 impl FromRequest for SquadOVSession {
     type Error = Error;
     type Future = Ready<Result<Self, Self::Error>>;
-    type Config = ();
 
     fn from_request(req : &HttpRequest, _: &mut dev::Payload) -> Self::Future {
         let extensions = req.extensions();

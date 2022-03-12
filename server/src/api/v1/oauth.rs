@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api;
 use crate::api::{
     v1::UserResourcePath,

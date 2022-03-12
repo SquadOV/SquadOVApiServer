@@ -25,7 +25,7 @@ const SQUADOV_MESSAGE_MAX_AGE_HEADER: &'static str = "x-squadov-max-age";
 const DEFAULT_MAX_AGE_SECONDS: i64 = 3600; // 1 hour
 const INFITE_MAX_AGE: i64 = -1;
 
-#[derive(Deserialize,Debug,Clone)]
+#[derive(Deserialize,Debug,Clone,Default)]
 pub struct RabbitMqConfig {
     pub amqp_url: String,
     pub prefetch_count: u16,
@@ -33,10 +33,15 @@ pub struct RabbitMqConfig {
     pub rso_queue: String,
     pub enable_valorant: bool,
     pub valorant_queue: String,
+    pub valorant_workers: u32,
+    pub failover_valorant_queue: String,
+    pub failover_valorant_workers: u32,
     pub enable_lol: bool,
     pub lol_queue: String,
+    pub lol_workers: u32,
     pub enable_tft: bool,
     pub tft_queue: String,
+    pub tft_workers: u32,
     pub enable_vod: bool,
     pub vod_queue: String,
     pub enable_csgo: bool,
@@ -51,15 +56,32 @@ pub struct RabbitMqConfig {
     pub additional_queues: Option<Vec<String>>,
 }
 
+impl RabbitMqConfig {
+    pub fn set_url(mut self, url: &str) -> Self {
+        self.amqp_url = url.to_string();
+        self
+    }
+
+    pub fn add_queue(mut self, q: &str) -> Self {
+        let q = q.to_string();
+        if let Some(queues) = self.additional_queues.as_mut() {
+            queues.push(q);
+        } else {
+            self.additional_queues = Some(vec![q]);
+        }
+        self
+    }
+}
+
 #[async_trait]
 pub trait RabbitMqListener: Send + Sync {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError>;
+    async fn handle(&self, data: &[u8], queue: &str) -> Result<(), SquadOvError>;
 }
 
 pub struct RabbitMqConnectionBundle {
     channels: Vec<Channel>,
     listeners: Arc<RwLock<HashMap<String, Vec<Arc<dyn RabbitMqListener>>>>>,
-    db: Arc<PgPool>,
+    db: Option<Arc<PgPool>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -76,7 +98,7 @@ pub struct RabbitMqPacket {
 pub struct RabbitMqInterface {
     pub config: RabbitMqConfig,
     publish_queue: Arc<RwLock<VecDeque<RabbitMqPacket>>>,
-    db: Arc<PgPool>,
+    db: Option<Arc<PgPool>>,
 }
 
 type RequeueCallbackFn = fn(&RabbitMqInterface, RabbitMqPacket);
@@ -86,7 +108,7 @@ impl RabbitMqConnectionBundle {
         self.channels.len()
     }
 
-    pub async fn connect(config: &RabbitMqConfig, db: Arc<PgPool>, num_channels: i32) -> Result<Self, SquadOvError> {
+    pub async fn connect(config: &RabbitMqConfig, db: Option<Arc<PgPool>>, num_channels: i32) -> Result<Self, SquadOvError> {
         let connection = Connection::connect(
             &config.amqp_url,
             ConnectionProperties::default()
@@ -118,6 +140,14 @@ impl RabbitMqConnectionBundle {
             if !config.valorant_queue.is_empty() {
                 ch.queue_declare(
                     &config.valorant_queue,
+                    queue_opts.clone(),
+                    default_table.clone(),
+                ).await?;
+            }
+
+            if !config.failover_valorant_queue.is_empty() {
+                ch.queue_declare(
+                    &config.failover_valorant_queue,
                     queue_opts.clone(),
                     default_table.clone(),
                 ).await?;
@@ -207,7 +237,7 @@ impl RabbitMqConnectionBundle {
         })
     }
 
-    pub async fn publish(&self, msg: RabbitMqPacket, ch_idx: usize) -> Result<(), SquadOvError> {
+    pub async fn publish(&self, msg: &RabbitMqPacket, ch_idx: usize) -> Result<(), SquadOvError> {
         let ch = self.channels.get(ch_idx);
         if ch.is_none() {
             log::warn!("Invalid Channel Index: {}", ch_idx);
@@ -253,24 +283,28 @@ impl RabbitMqConnectionBundle {
         Ok(())
     }
 
-    async fn add_delayed_rabbitmq_message(&self, msg: RabbitMqPacket, total_delay_ms: i64) -> Result<(), SquadOvError> {
-        let execute_time = Utc::now() + chrono::Duration::milliseconds(total_delay_ms);
-        sqlx::query!(
-            "
-            INSERT INTO squadov.deferred_rabbitmq_messages (
+    async fn add_delayed_rabbitmq_message(&self, msg: &RabbitMqPacket, total_delay_ms: i64) -> Result<(), SquadOvError> {
+        if let Some(db) = self.db.as_ref() {
+            let execute_time = Utc::now() + chrono::Duration::milliseconds(total_delay_ms);
+            sqlx::query!(
+                "
+                INSERT INTO squadov.deferred_rabbitmq_messages (
+                    execute_time,
+                    message
+                )
+                VALUES (
+                    $1,
+                    $2
+                )
+                ",
                 execute_time,
-                message
+                serde_json::to_vec(&msg)?,
             )
-            VALUES (
-                $1,
-                $2
-            )
-            ",
-            execute_time,
-            serde_json::to_vec(&msg)?,
-        )
-            .execute(&*self.db)
-            .await?;
+                .execute(&**db)
+                .await?;
+        } else {
+            log::warn!("Trying to delay message without a DB connection?");
+        }
         Ok(())
     }
 
@@ -304,6 +338,7 @@ impl RabbitMqConnectionBundle {
 
             let expired = (current_timestamp - og_timestamp) > (max_age_seconds as u64) && max_age_seconds != INFITE_MAX_AGE;
             let mut requeue_ms: Option<i64> = None;
+            let mut change_queue: Option<String> = None;
 
             if !expired {
                 let current_listeners = listeners.read().await.clone();
@@ -311,11 +346,12 @@ impl RabbitMqConnectionBundle {
                 if topic_listeners.is_some() {
                     let topic_listeners = topic_listeners.unwrap();
                     for l in topic_listeners {
-                        match l.handle(&msg.data).await {
+                        match l.handle(&msg.data, &queue).await {
                             Ok(_) => (),
                             Err(err) => {
                                 log::warn!("Failure in processing RabbitMQ message: {:?}", err);
                                 match err {
+                                    SquadOvError::SwitchQueue(queue) => { change_queue = Some(queue) },
                                     SquadOvError::Defer(ms) => { requeue_ms = Some(ms); },
                                     SquadOvError::RateLimit => { requeue_ms = Some(100); },
                                     _ => (),
@@ -358,6 +394,16 @@ impl RabbitMqConnectionBundle {
                     base_delay_ms: requeue_ms,
                     max_age_seconds,
                 });
+            } else if let Some(new_queue) = change_queue {
+                requeue_callback(&*itf, RabbitMqPacket{
+                    queue: new_queue.clone(),
+                    data: msg.data.clone(),
+                    priority: msg.properties.priority().unwrap_or(RABBITMQ_DEFAULT_PRIORITY),
+                    timestamp: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(og_timestamp as i64, 0), Utc),
+                    retry_count: 0,
+                    base_delay_ms: requeue_ms,
+                    max_age_seconds,
+                });
             }
         }
 
@@ -390,7 +436,7 @@ impl RabbitMqConnectionBundle {
 }
 
 impl RabbitMqInterface {
-    pub async fn new(config: &RabbitMqConfig, db: Arc<PgPool>, enabled: bool) -> Result<Arc<Self>, SquadOvError> {
+    pub async fn new(config: &RabbitMqConfig, db: Option<Arc<PgPool>>, enabled: bool) -> Result<Arc<Self>, SquadOvError> {
         log::info!("Connecting to RabbitMQ...");
         let publish_queue = Arc::new(RwLock::new(VecDeque::new()));
 
@@ -433,7 +479,7 @@ impl RabbitMqInterface {
                                 let next_msg = queue_clone.pop_front();
                                 if next_msg.is_some() {
                                     let next_msg = next_msg.unwrap();
-                                    match publisher.publish(next_msg, publish_idx).await {
+                                    match publisher.publish(&next_msg, publish_idx).await {
                                         Ok(_) => (),
                                         Err(err) => {
                                             is_valid = false;
@@ -518,5 +564,41 @@ impl RabbitMqInterface {
             base_delay_ms: None,
             max_age_seconds,
         });
+    }
+
+    pub async fn publish_immediate(&self, queue: &str, data: Vec<u8>, priority: u8, max_age_seconds: i64) {
+        self.publish_direct_immediate(RabbitMqPacket{
+            queue: String::from(queue),
+            data,
+            priority,
+            timestamp: Utc::now(),
+            retry_count: 0,
+            base_delay_ms: None,
+            max_age_seconds,
+        }).await;
+    }
+
+    pub async fn publish_direct_immediate(&self, packet: RabbitMqPacket) {
+        for _i in 0..3 {
+            let publisher = match RabbitMqConnectionBundle::connect(&self.config, self.db.clone(), 1).await {
+                Ok(bundle) => bundle,
+                Err(err) => {
+                    log::warn!("Failed to connect to RabbitMQ publisher: {:?}", err);
+                    async_std::task::sleep(std::time::Duration::from_millis(16)).await;
+                    continue;
+                }
+            };
+    
+            match publisher.publish(&packet, 0).await {
+                Ok(_) => (),
+                Err(err) => {
+                    log::warn!("Failed to publish RabbitMQ message: {:?}", err);
+                    continue;
+                }
+            }
+
+            break;
+        }
+        
     }
 }

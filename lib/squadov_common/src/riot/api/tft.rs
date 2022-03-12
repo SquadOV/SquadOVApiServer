@@ -15,7 +15,7 @@ impl super::RiotApiHandler {
     pub async fn get_tft_matches_for_user(&self, puuid: &str, region: &str, count: i32) -> Result<Vec<String>, SquadOvError> {
         let client = self.create_http_client()?;
         let endpoint = Self::build_api_endpoint(&super::riot_region_to_routing(region)?, &format!("tft/match/v1/matches/by-puuid/{}/ids?count={}", puuid, count));
-        self.tick_thresholds().await;
+        self.tick_thresholds().await?;
 
         let resp = client.get(&endpoint)
             .send()
@@ -28,7 +28,7 @@ impl super::RiotApiHandler {
     pub async fn get_tft_match(&self, region: &str, match_id: &str) -> Result<TftMatchDto, SquadOvError> {
         let client = self.create_http_client()?;
         let endpoint = Self::build_api_endpoint(&super::riot_region_to_routing(region)?, &format!("tft/match/v1/matches/{}", match_id));
-        self.tick_thresholds().await;
+        self.tick_thresholds().await?;
 
         let resp = client.get(&endpoint)
             .send()

@@ -10,6 +10,7 @@ use actix_web::{
     },
     HttpResponse,
     HttpRequest,
+    HttpMessage,
 };
 use squadov_common::{
     SquadOvError,
@@ -24,7 +25,6 @@ use squadov_common::{
     vod::db as vdb,
 };
 use serde::{Serialize, Deserialize};
-use serde_qs::actix::QsQuery;
 use std::sync::Arc;
 use actix_multipart::Multipart;
 use futures::{StreamExt, TryStreamExt};
@@ -86,7 +86,7 @@ impl ApiApplication {
     }
 }
 
-pub async fn get_basic_profile_handler(app : web::Data<Arc<ApiApplication>>, query: QsQuery<UserProfileQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_basic_profile_handler(app : web::Data<Arc<ApiApplication>>, query: web::Query<UserProfileQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
     // Need to determine WHO is making this request.
     // Is it public? Or is there an actual session behind this.
     let extensions = req.extensions();
@@ -103,15 +103,14 @@ pub async fn edit_current_user_profile_basic_data_handler(app : web::Data<Arc<Ap
     let mut basic_data = UserProfileBasicUpdateData::default();
     
     while let Some(mut field) = payload.try_next().await? {
-        let content_type = field.content_disposition().ok_or(SquadOvError::BadRequest)?;
-        let field_name = content_type.get_name().ok_or(SquadOvError::BadRequest)?;
+        let field_name = String::from(field.content_disposition().get_name().ok_or(SquadOvError::BadRequest)?);
         
         let mut tmp = web::BytesMut::new();
         while let Some(Ok(chunk)) = field.next().await {
             tmp.put(&*chunk);
         }
 
-        match field_name {
+        match field_name.as_str() {
             "coverPhoto" => { cover_photo = Some(tmp) },
             "profilePhoto" => { profile_photo = Some(tmp) },
             "description" => { basic_data.description = Some(std::str::from_utf8(&*tmp)?.to_string()) },

@@ -1,0 +1,2 @@
+ALTER TABLE riot_api_outage_status
+ADD COLUMN failover BOOLEAN NOT NULL DEFAULT FALSE;

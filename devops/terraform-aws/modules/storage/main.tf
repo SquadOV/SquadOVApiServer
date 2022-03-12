@@ -154,6 +154,44 @@ resource "aws_s3_bucket" "blob_storage_bucket" {
     }
 }
 
+resource "aws_s3_bucket" "combatlog_bucket" {
+    bucket = "squadov-us-combatlog-bucket${var.bucket_suffix}"
+    acl = "private"
+
+    lifecycle_rule {
+        enabled = true
+        transition {
+            days = 30
+            storage_class = "STANDARD_IA"
+        }
+
+        transition {
+            days = 90
+            storage_class = "GLACIER_IR"
+        }
+    }
+
+    server_side_encryption_configuration {
+        rule {
+            apply_server_side_encryption_by_default {
+                sse_algorithm = "AES256"
+            }
+        }
+    }
+
+    tags = {
+        "s3" = "combatlog"
+    }
+}
+
+output "combatlog_bucket_arn" {
+    value = aws_s3_bucket.combatlog_bucket.arn
+}
+
+output "combatlog_bucket_id" {
+    value = aws_s3_bucket.combatlog_bucket.id
+}
+
 data "aws_iam_policy_document" "blob_access_policy" {
     statement {
         actions = ["s3:GetObject"]

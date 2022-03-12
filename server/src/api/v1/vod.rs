@@ -18,7 +18,7 @@ use crate::api::v1::FavoriteResponse;
 use uuid::Uuid;
 use serde::Deserialize;
 use std::sync::Arc;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use squadov_common::{
     SquadOvError,
     access::AccessTokenRequest,

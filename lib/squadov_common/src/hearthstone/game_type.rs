@@ -2,7 +2,7 @@ use derive_more::{Display};
 use serde_repr::{Serialize_repr, Deserialize_repr};
 use num_enum::TryFromPrimitive;
 
-#[derive(sqlx::Type, Display, Clone, Copy, Serialize_repr, Deserialize_repr, TryFromPrimitive, PartialEq)]
+#[derive(sqlx::Type, Display, Clone, Copy, Serialize_repr, Deserialize_repr, TryFromPrimitive, PartialEq, Debug)]
 #[repr(i32)]
 pub enum GameType {
     Unknown = 0,

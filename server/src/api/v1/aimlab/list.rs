@@ -4,11 +4,10 @@ use squadov_common::{
 };
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
-use serde_qs::actix::QsQuery;
 
 #[derive(Deserialize)]
 pub struct AimlabUserTaskListInput {
@@ -74,7 +73,7 @@ impl api::ApiApplication {
     }
 }
 
-pub async fn list_aimlab_matches_for_user_handler(data : web::Path<AimlabUserTaskListInput>, query: web::Query<api::PaginationParameters>, filter: QsQuery<AimlabListQuery>, app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, squadov_common::SquadOvError> {
+pub async fn list_aimlab_matches_for_user_handler(data : web::Path<AimlabUserTaskListInput>, query: web::Query<api::PaginationParameters>, filter: web::Json<AimlabListQuery>, app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest) -> Result<HttpResponse, squadov_common::SquadOvError> {
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
 

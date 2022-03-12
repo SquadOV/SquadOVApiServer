@@ -134,7 +134,7 @@ where
             // For whatever reason, the 1st time we call pool.begin() if sqlx is set to use a tokio runtime
             // will never return when called within this `rt` runtime. Dunno. Setting sqlx to use
             // the async-std runtime works fine though.
-            let mut rt = tokio::runtime::Runtime::new().unwrap();
+            let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
                 loop {
                     // Don't constantly look for a new task so that there's time for the 

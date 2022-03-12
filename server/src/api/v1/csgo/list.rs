@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use squadov_common::{
@@ -10,14 +10,13 @@ use squadov_common::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use serde_qs::actix::QsQuery;
 
 #[derive(Deserialize)]
 pub struct CsgoUserMatchListInput {
     user_id: i64,
 }
 
-pub async fn list_csgo_matches_for_user_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<CsgoUserMatchListInput>, query: web::Query<api::PaginationParameters>, filter: QsQuery<CsgoListQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_csgo_matches_for_user_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<CsgoUserMatchListInput>, query: web::Query<api::PaginationParameters>, filter: web::Json<CsgoListQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
 

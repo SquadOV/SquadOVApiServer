@@ -2,7 +2,7 @@ mod stats;
 
 use crate::api;
 use squadov_common::stats::StatPermission;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use juniper::http::GraphQLRequest;
 use juniper::http::graphiql::graphiql_source;
 use std::sync::Arc;

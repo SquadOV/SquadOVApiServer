@@ -8,6 +8,7 @@ mod duels;
 
 use serde::{Deserialize};
 use uuid::Uuid;
+use squadov_common::hearthstone::GameType;
 
 #[derive(Deserialize)]
 pub struct HearthstoneMatchGetInput {
@@ -30,12 +31,14 @@ pub struct HearthstoneUserMatchInput {
 #[serde(rename_all="camelCase")]
 pub struct HearthstoneListQuery {
     has_vod: Option<bool>,
+    game_types: Vec<GameType>,
 }
 
 impl Default for HearthstoneListQuery {
     fn default() -> Self {
         Self {
             has_vod: None,
+            game_types: vec![],
         }
     }
 }

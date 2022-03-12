@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, web, HttpRequest};
+use actix_web::{HttpResponse, web, HttpRequest, HttpMessage};
 use serde::Deserialize;
 use crate::logged_error;
 use crate::api;

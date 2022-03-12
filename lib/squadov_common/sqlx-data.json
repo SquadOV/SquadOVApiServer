@@ -337,13 +337,13 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -1166,19 +1166,6 @@
       ]
     }
   },
-  "253a4979e5b612682bef573ba6ae34729eae5917fc93fc1294431da6bec433d7": {
-    "query": "\n            INSERT INTO squadov.deferred_rabbitmq_messages (\n                execute_time,\n                message\n            )\n            VALUES (\n                $1,\n                $2\n            )\n            ",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Bytea"
-        ]
-      },
-      "nullable": []
-    }
-  },
   "265c3bbbe8992412335d2cc837481eb48bbd391e85aaecdf144710a8675c0c60": {
     "query": "\n            SELECT *\n            FROM squadov.community_invites\n            WHERE community_id = $1\n                AND inviter_user_id = $2\n            ",
     "describe": {
@@ -1549,36 +1536,18 @@
       ]
     }
   },
-  "324162c4855772ef32c8f9017489c27cdaa28f145833d5e147827cc271acf466": {
-    "query": "\n        SELECT ra.puuid, ra.game_name, ra.tag_line\n        FROM squadov.riot_accounts AS ra\n        INNER JOIN squadov.riot_account_links AS ral\n            ON ral.puuid = ra.puuid\n        WHERE ral.user_id = $1\n            AND ra.game_name IS NOT NULL\n            AND ra.tag_line IS NOT NULL\n        ",
+  "32288c8f4ddaf1349d259ec03137f2726cbb76143a39a98920c1ec797eb514b2": {
+    "query": "\n        INSERT INTO squadov.valorant_match_uuid_link (\n            match_uuid,\n            match_id,\n            shard\n        )\n        VALUES (\n            $1,\n            $2,\n            $3\n        )\n        ",
     "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "puuid",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 1,
-          "name": "game_name",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 2,
-          "name": "tag_line",
-          "type_info": "Varchar"
-        }
-      ],
+      "columns": [],
       "parameters": {
         "Left": [
-          "Int8"
+          "Uuid",
+          "Varchar",
+          "Varchar"
         ]
       },
-      "nullable": [
-        false,
-        true,
-        true
-      ]
+      "nullable": []
     }
   },
   "335a0330517884d402e4072e2170f66fc6a8d72562e43bc5b25949391790eb25": {
@@ -1747,6 +1716,19 @@
           "VarcharArray",
           "Int8Array",
           "Int8Array"
+        ]
+      },
+      "nullable": []
+    }
+  },
+  "3af293b60b18ac60064830e0c94f1dcdf5fdbb48916f7930c7bd2314767d9503": {
+    "query": "\n                INSERT INTO squadov.deferred_rabbitmq_messages (\n                    execute_time,\n                    message\n                )\n                VALUES (\n                    $1,\n                    $2\n                )\n                ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Bytea"
         ]
       },
       "nullable": []
@@ -3105,6 +3087,33 @@
       ]
     }
   },
+  "68af7b42b6415047528946590b10101428a135387da3df99d5f20dee911bdb23": {
+    "query": "\n            SELECT down, failover\n            FROM squadov.riot_api_outage_status\n            WHERE game = $1 AND region = $2\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "down",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 1,
+          "name": "failover",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
+        false
+      ]
+    }
+  },
   "6a054270f2bc3a87e913891942f436e70f6c793e24148717293cf22f17c14b86": {
     "query": "\n            SELECT ral.user_id\n            FROM squadov.valorant_match_players AS vmp\n            INNER JOIN squadov.riot_account_links AS ral\n                ON ral.puuid = vmp.puuid\n            WHERE vmp.match_uuid = $1\n            ",
     "describe": {
@@ -3265,18 +3274,18 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
         true,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -3334,11 +3343,11 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
         true,
-        null
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -4322,6 +4331,38 @@
       ]
     }
   },
+  "9bcc2220e9a111144abe74073d2d6573a8f96250d1391009972e5979f2066361": {
+    "query": "\n        SELECT ra.puuid, COALESCE(ra.game_name, ra.summoner_name) AS \"game_name\", COALESCE(ra.tag_line, '') AS \"tag_line\"\n        FROM squadov.riot_accounts AS ra\n        INNER JOIN squadov.riot_account_links AS ral\n            ON ral.puuid = ra.puuid\n        WHERE ral.user_id = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "puuid",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "game_name",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 2,
+          "name": "tag_line",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        null,
+        null
+      ]
+    }
+  },
   "9d1a6905caf2a95b43fa01bc0a7d76692c3abb499b5ac6c1c8465c6d8b84dd76": {
     "query": "\n            UPDATE squadov.wow_match_view_character_presence AS wcp\n            SET current_hp = COALESCE(t.hp, wcp.current_hp),\n                max_hp = COALESCE(t.max, wcp.max_hp)\n            FROM UNNEST($1::UUID[], $2::VARCHAR[], $3::BIGINT[], $4::BIGINT[]) AS t(view_id, unit_guid, hp, max)\n            WHERE wcp.view_id = t.view_id\n                AND wcp.unit_guid = t.unit_guid\n            ",
     "describe": {
@@ -4771,19 +4812,6 @@
       "parameters": {
         "Left": [
           "Int8"
-        ]
-      },
-      "nullable": []
-    }
-  },
-  "ae7753a944d0cd8dc373b194ed0818f31d7305a8b035e9bcfb4948d75f3cd38e": {
-    "query": "\n        INSERT INTO squadov.valorant_match_uuid_link (\n            match_uuid,\n            match_id\n        )\n        VALUES (\n            $1,\n            $2\n        )\n        ",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Varchar"
         ]
       },
       "nullable": []
@@ -5329,14 +5357,14 @@
         ]
       },
       "nullable": [
-        false,
-        false,
         true,
         true,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },

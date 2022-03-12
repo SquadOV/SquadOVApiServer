@@ -54,7 +54,15 @@ impl BlobManagementClient {
         let mut compressed_bytes: Vec<u8> = Vec::new();
         if compress {
             // A quality of 6 seems to be a good balanace between size and speed.
-            let mut compressor = brotli2::read::BrotliEncoder::new(bytes, 6);
+            let mut compressor = brotli::CompressorReader::with_params(
+                bytes,
+                4096,
+                &{
+                    let mut params = brotli::enc::BrotliEncoderParams::default();
+                    params.quality = 6;
+                    params
+                },
+            );
             compressor.read_to_end(&mut compressed_bytes)?;
         }
 
@@ -106,7 +114,7 @@ impl BlobManagementClient {
         if is_compressed {
             let mut uncompressed_bytes: Vec<u8> = Vec::new();
             {
-                let mut decompressor = brotli2::read::BrotliDecoder::new(&compressed_bytes[..]);
+                let mut decompressor = brotli::Decompressor::new(&compressed_bytes[..], 4096);
                 decompressor.read_to_end(&mut uncompressed_bytes)?;
             }
             Ok(uncompressed_bytes)

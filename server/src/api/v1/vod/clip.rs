@@ -4,7 +4,7 @@ use crate::api::v1::{
     RecentMatchQuery,
     UserProfilePath,
 };
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 use squadov_common::{

@@ -2158,8 +2158,8 @@
         ]
       },
       "nullable": [
-        null,
-        false
+        true,
+        true
       ]
     }
   },
@@ -3216,10 +3216,10 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -4313,6 +4313,11 @@
           "ordinal": 6,
           "name": "disable_sentry",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 7,
+          "name": "max_bitrate_kbps",
+          "type_info": "Int4"
         }
       ],
       "parameters": {
@@ -4321,6 +4326,7 @@
         ]
       },
       "nullable": [
+        false,
         false,
         false,
         false,
@@ -6620,11 +6626,11 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },

@@ -49,11 +49,22 @@ pub struct RiotApiHandler {
     api_key: RiotApiKeyConfig,
     burst_threshold: Arc<Semaphore>,
     bulk_threshold: Arc<Semaphore>,
+    db: Arc<PgPool>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum RiotApiTask {
+    UnverifiedAccountLink{
+        // Either game_name + tag_line must be set or
+        // summoner_name + platform_id
+        game_name: Option<String>,
+        tag_line: Option<String>,
+        summoner_name: Option<String>,
+        platform_id: Option<String>,
+        user_id: i64,
+        raw_puuid: String,
+    },
     AccountMe{
         access_token: String,
         refresh_token: String,
@@ -96,8 +107,14 @@ pub enum RiotApiTask {
     }
 }
 
+#[derive(Default)]
+struct RiotApiStatus {
+    down: bool,
+    failover: bool,
+}
+
 impl RiotApiHandler {
-    pub fn new(api_key: RiotApiKeyConfig) -> Self {
+    pub fn new(api_key: RiotApiKeyConfig, db: Arc<PgPool>) -> Self {
         let burst_threshold = Arc::new(Semaphore::new(api_key.burst_limit.requests));
         let bulk_threshold = Arc::new(Semaphore::new(api_key.bulk_limit.requests));
 
@@ -108,6 +125,35 @@ impl RiotApiHandler {
             api_key,
             burst_threshold,
             bulk_threshold,
+            db,
+        }
+    }
+
+    // Force a defer if we've manually set a region as being "down".
+    pub async fn check_region_status(&self, game: &str, region: &str, allow_failover: bool) -> Result<(), SquadOvError> {
+        let game = game.to_lowercase();
+        let region = region.to_lowercase();
+        let status: RiotApiStatus = sqlx::query_as!(
+            RiotApiStatus,
+            "
+            SELECT down, failover
+            FROM squadov.riot_api_outage_status
+            WHERE game = $1 AND region = $2
+            ",
+            &game,
+            &region,
+        )
+            .fetch_optional(&*self.db)
+            .await?
+            .unwrap_or(RiotApiStatus::default());
+
+        if status.failover && allow_failover {
+            Err(SquadOvError::Failover)
+        } else if status.down {
+            // Delay for an hour
+            Err(SquadOvError::Defer(3600000))
+        } else {
+            Ok(())
         }
     }
 
@@ -117,12 +163,12 @@ impl RiotApiHandler {
     // the number of requests to the max amount; this resulted in a problem where we'd go over
     // the rate limit due to the fact that we can use more than the rate limit amount within
     // a given time period (especially if the time period is low).
-    async fn tick_burst_threshold(&self) {
+    async fn tick_burst_threshold(&self) -> Result<(), SquadOvError> {
         if !self.api_key.burst_limit.enabled {
-            return;
+            return Ok(());
         }
 
-        let permit = self.burst_threshold.acquire().await;
+        let permit = self.burst_threshold.acquire().await?;
         permit.forget();
 
         let api_key = self.api_key.clone();
@@ -131,14 +177,15 @@ impl RiotApiHandler {
             async_std::task::sleep(std::time::Duration::from_secs(api_key.burst_limit.seconds)).await;
             threshold.add_permits(1);
         });
+        Ok(())
     }
 
-    async fn tick_bulk_threshold(&self) {
+    async fn tick_bulk_threshold(&self) -> Result<(), SquadOvError> {
         if !self.api_key.bulk_limit.enabled {
-            return;
+            return Ok(());
         }
 
-        let permit = self.bulk_threshold.acquire().await;
+        let permit = self.bulk_threshold.acquire().await?;
         permit.forget();
 
         let api_key = self.api_key.clone();
@@ -147,11 +194,14 @@ impl RiotApiHandler {
             async_std::task::sleep(std::time::Duration::from_secs(api_key.bulk_limit.seconds)).await;
             threshold.add_permits(1);
         });
+
+        Ok(())
     }
 
-    async fn tick_thresholds(&self) {
-        self.tick_burst_threshold().await;
-        self.tick_bulk_threshold().await;
+    async fn tick_thresholds(&self) -> Result<(), SquadOvError> {
+        self.tick_burst_threshold().await?;
+        self.tick_bulk_threshold().await?;
+        Ok(())
     }
 
     fn build_api_endpoint(region: &str, endpoint: &str) -> String {
@@ -221,16 +271,27 @@ impl RiotApiApplicationInterface {
 
 #[async_trait]
 impl RabbitMqListener for RiotApiApplicationInterface {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
-        log::info!("Handle Riot RabbitMQ Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
+    async fn handle(&self, data: &[u8], queue: &str) -> Result<(), SquadOvError> {
+        log::info!("Handle Riot RabbitMQ Task: {} [{}]", std::str::from_utf8(data).unwrap_or("failure"), queue);
         let task: RiotApiTask = serde_json::from_slice(data)?;
         match task {
+            RiotApiTask::UnverifiedAccountLink{game_name, tag_line, summoner_name, platform_id, raw_puuid, user_id} => {
+                if game_name.is_some() && tag_line.is_some() {
+                    self.perform_unverified_account_link(game_name.unwrap().as_str(), tag_line.unwrap().as_str(), &raw_puuid, user_id).await?;
+                } else if summoner_name.is_some() && platform_id.is_some() {
+                    self.perform_unverified_summoner_link(summoner_name.unwrap().as_str(), platform_id.unwrap().as_str(), &raw_puuid, user_id).await?;
+                } else {
+                    log::warn!("...Invalid attempt at performing an unverified account link.");
+                    return Err(SquadOvError::BadRequest);
+                }
+            },
             RiotApiTask::AccountMe{access_token, refresh_token, expiration, user_id} => self.obtain_riot_account_from_access_token(&access_token, &refresh_token, &expiration, user_id).await.and(Ok(()))?,
             RiotApiTask::Account{puuid} => self.obtain_riot_account_from_puuid(&puuid).await?,
             RiotApiTask::ValorantBackfill{puuid} => self.backfill_user_valorant_matches(&puuid).await?,
-            RiotApiTask::ValorantMatch{match_id, shard} => match self.obtain_valorant_match_info(&match_id, &shard).await {
+            RiotApiTask::ValorantMatch{match_id, shard} => match self.obtain_valorant_match_info(&match_id, &shard, queue == self.mqconfig.valorant_queue).await {
                 Ok(_) => (),
                 Err(err) => match err {
+                    SquadOvError::Failover => return Err(SquadOvError::SwitchQueue(self.mqconfig.failover_valorant_queue.clone())),
                     // Remap not found to defer because Rito's api might not be that fast to give us the info right as the game finishes.
                     SquadOvError::NotFound => return Err(SquadOvError::Defer(60 * 1000)),
                     _ => return Err(err)

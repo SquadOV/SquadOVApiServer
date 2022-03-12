@@ -1,3 +1,4 @@
+use crate::SquadOvError;
 use tokio::sync::{Semaphore};
 use std::sync::Arc;
 
@@ -14,8 +15,8 @@ impl RateLimiter {
         }
     }
 
-    pub async fn consume(&self) {
-        let permit = self.limiter.acquire().await;
+    pub async fn consume(&self) -> Result<(), SquadOvError> {
+        let permit = self.limiter.acquire().await?;
         permit.forget();
 
         let seconds = self.seconds;
@@ -24,5 +25,6 @@ impl RateLimiter {
             async_std::task::sleep(std::time::Duration::from_secs(seconds)).await;
             limiter.add_permits(1);
         });
+        Ok(())
     }
 }

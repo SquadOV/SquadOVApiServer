@@ -6,7 +6,7 @@ use squadov_common::{
     storage::CloudStorageLocation,
 };
 use crate::api;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use serde::{Deserialize, Serialize};
 use api::v1::UploadPartQuery;
 use std::default::Default;

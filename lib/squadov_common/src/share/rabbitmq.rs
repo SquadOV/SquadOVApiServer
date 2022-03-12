@@ -165,7 +165,7 @@ impl SharingRabbitmqInterface {
 
 #[async_trait]
 impl RabbitMqListener for SharingRabbitmqInterface {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
+    async fn handle(&self, data: &[u8], _queue: &str) -> Result<(), SquadOvError> {
         log::info!("Handle Sharing Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
         let task: SharingTask = serde_json::from_slice(data)?;
         match task {

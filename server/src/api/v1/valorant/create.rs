@@ -7,7 +7,7 @@ use squadov_common::{
 };
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use std::sync::Arc;
 use serde::{Deserialize};
 use sqlx::{Transaction, Postgres};
@@ -107,7 +107,7 @@ pub async fn create_new_valorant_match_handler(data : web::Json<InputValorantMat
     // Need to try multiple times to create a unique match uuid for the match in question.
     for _i in 0..2i32 {
         let mut tx = app.pool.begin().await?;
-        let match_uuid = match db::create_or_get_match_uuid_for_valorant_match(&mut tx, &data.match_id).await {
+        let match_uuid = match db::create_or_get_match_uuid_for_valorant_match(&mut tx, &data.match_id, &shard).await {
             Ok(x) => x,
             Err(err) => match err {
                 squadov_common::SquadOvError::Duplicate => {

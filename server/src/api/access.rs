@@ -35,7 +35,7 @@ use std::task::{Context, Poll};
 use std::rc::Rc;
 use std::cell::RefCell;
 use actix_service::{Service, Transform};
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::{ok, Ready};
 use futures::Future;
 use super::auth::SquadOVSession;
@@ -87,15 +87,13 @@ impl<T: Send + Sync> ApiAccess<T> {
     }
 }
 
-impl<S, B, T> Transform<S> for ApiAccess<T>
+impl<S, T> Transform<S, ServiceRequest> for ApiAccess<T>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
     T: Send + Sync + 'static,
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type InitError = ();
     type Transform = ApiAccessMiddleware<S, T>;
@@ -103,7 +101,7 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(ApiAccessMiddleware { 
-            service: Rc::new(RefCell::new(service)),
+            rc_service: Rc::new(RefCell::new(service)),
             checker: self.checker.clone(),
             verb_checkers: self.verb_checkers.clone(),
             mandatory_session: self.mandatory_session,
@@ -112,30 +110,28 @@ where
 }
 
 pub struct ApiAccessMiddleware<S, T : Send + Sync> {
-    service: Rc<RefCell<S>>,
+    rc_service: Rc<RefCell<S>>,
     checker: TChecker<T>,
     verb_checkers: HashMap<String, TChecker<T>>,
     mandatory_session: bool,
 }
 
-impl<S, B, T> Service for ApiAccessMiddleware<S, T>
+impl<S, T> Service<ServiceRequest> for ApiAccessMiddleware<S, T>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
     T: Send + Sync + 'static,
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.borrow_mut().poll_ready(cx)
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.rc_service.borrow_mut().poll_ready(cx)
     }
 
-    fn call(&mut self, req: ServiceRequest) -> Self::Future {
-        let mut srv = self.service.clone();
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let srv = self.rc_service.clone();
         let method = String::from(req.method().as_str());
         let checker = if self.verb_checkers.contains_key(&method) {
             self.verb_checkers.get(&method).unwrap().clone()
@@ -173,10 +169,7 @@ where
                 };
             }
 
-            let resp = match ServiceRequest::from_parts(request, payload) {
-                Ok(x) => srv.call(x).await?,
-                Err(_) => return Err(actix_web::error::ErrorInternalServerError("Failed to reconstruct service request"))
-            };
+            let resp = srv.call(ServiceRequest::from_parts(request, payload)).await?;
 
             // This is *NOT IDEAL*; however, for checkers that rely on the path, it has to go here since actix web doesn't
             // parse the path parameters beforehand.

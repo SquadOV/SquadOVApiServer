@@ -8,15 +8,21 @@ use squadov_common::{
             TWITCH_CHANNEL_SUBSCRIBE,
             TWITCH_CHANNEL_UNSUB,
         },
-        oauth,
     },
-    accounts::twitch,
 };
 use crate::api::ApiApplication;
 use std::sync::Arc;
 use serde::Deserialize;
 use sha2::Sha256;
 use hmac::{Hmac, Mac, NewMac};
+
+#[cfg(feature = "eventloop")]
+use squadov_common::{
+    twitch::{
+        oauth,
+    },
+    accounts::twitch,
+};
 
 #[derive(Deserialize)]
 pub struct TwitchEventSubSubscription {
@@ -68,6 +74,7 @@ impl ApiApplication {
         Ok(())
     }
 
+    #[cfg(feature = "eventloop")]
     pub async fn reverify_twitch_account_access_tokens(&self) -> Result<(), SquadOvError> {
         let accounts = twitch::get_twitch_accounts_need_validation(&*self.pool).await?;
         for a in accounts {

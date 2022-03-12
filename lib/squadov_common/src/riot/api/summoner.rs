@@ -8,7 +8,7 @@ impl super::RiotApiHandler {
     pub async fn get_tft_summoner_from_puuid(&self, puuid: &str, platform: &str) -> Result<RiotSummoner, SquadOvError> {
         let client = self.create_http_client()?;
         let endpoint = Self::build_api_endpoint(platform, &format!("tft/summoner/v1/summoners/by-puuid/{}", puuid));
-        self.tick_thresholds().await;
+        self.tick_thresholds().await?;
 
         let resp = client.get(&endpoint)
             .send()

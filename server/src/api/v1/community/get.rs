@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::{
     api,
     api::{
@@ -18,7 +18,6 @@ use squadov_common::{
     },
     subscriptions,
 };
-use serde_qs::actix::QsQuery;
 
 pub async fn get_community_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<CommunityPathInput>) -> Result<HttpResponse, SquadOvError> {
     Ok(
@@ -59,7 +58,7 @@ pub async fn get_community_slug_handler(app : web::Data<Arc<api::ApiApplication>
     )
 }
 
-pub async fn list_communities_handler(app : web::Data<Arc<api::ApiApplication>>, filter: QsQuery<CommunityListQuery>, request: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_communities_handler(app : web::Data<Arc<api::ApiApplication>>, filter: web::Query<CommunityListQuery>, request: HttpRequest) -> Result<HttpResponse, SquadOvError> {
     let communities = if filter.only_me {
         let extensions = request.extensions();
         let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::BadRequest)?;

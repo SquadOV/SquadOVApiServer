@@ -48,7 +48,7 @@ impl SteamApiRabbitmqInterface {
 
 #[async_trait]
 impl RabbitMqListener for SteamApiRabbitmqInterface {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
+    async fn handle(&self, data: &[u8], _queue: &str) -> Result<(), SquadOvError> {
         log::info!("Handle Steam RabbitMQ Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
         let task: SteamTask = serde_json::from_slice(data)?;
         match task {

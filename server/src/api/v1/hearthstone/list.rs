@@ -1,13 +1,11 @@
 use squadov_common::SquadOvError;
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use std::sync::Arc;
 use uuid::Uuid;
 use squadov_common::hearthstone::{GameType, get_all_hearthstone_game_types};
 use serde::{Deserialize};
-use std::convert::TryFrom;
-use serde_qs::actix::QsQuery;
 
 pub struct HearthstoneMatchListEntry {
     match_uuid: Uuid
@@ -17,7 +15,6 @@ pub struct HearthstoneMatchListEntry {
 pub struct FilteredMatchParameters {
     pub start: i64,
     pub end: i64,
-    pub filter: String
 }
 
 impl api::ApiApplication {
@@ -70,13 +67,8 @@ impl api::ApiApplication {
     }
 }
 
-pub async fn list_hearthstone_matches_for_user_handler(data : web::Path<super::HearthstoneUserMatchInput>, query: web::Query<FilteredMatchParameters>, filters: QsQuery<super::HearthstoneListQuery>, app : web::Data<Arc<api::ApiApplication>>, req : HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_hearthstone_matches_for_user_handler(data : web::Path<super::HearthstoneUserMatchInput>, query: web::Query<FilteredMatchParameters>, filters: web::Json<super::HearthstoneListQuery>, app : web::Data<Arc<api::ApiApplication>>, req : HttpRequest) -> Result<HttpResponse, SquadOvError> {
     let query = query.into_inner();
-    let gametype_filter = if query.filter.is_empty() {
-        vec![]
-    } else {
-        serde_json::from_str::<Vec<i32>>(&query.filter)?.into_iter().map(|e| { GameType::try_from(e).unwrap_or(GameType::Unknown) }).collect::<Vec<GameType>>()
-    };
 
     let extensions = req.extensions();
     let session = extensions.get::<SquadOVSession>().ok_or(SquadOvError::Unauthorized)?;
@@ -86,10 +78,10 @@ pub async fn list_hearthstone_matches_for_user_handler(data : web::Path<super::H
         session.user.id,
         query.start,
         query.end,
-        if gametype_filter.is_empty() {
+        if filters.game_types.is_empty() {
             get_all_hearthstone_game_types()
         } else {
-            &gametype_filter
+            &filters.game_types
         },
         &filters,
     ).await?;

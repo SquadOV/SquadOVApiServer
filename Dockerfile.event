@@ -11,20 +11,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 RUN mkdir -p /squadov/config
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup toolchain install 1.51.0 && rustup default 1.51.0
+RUN rustup toolchain install 1.58.1 && rustup default 1.58.1
 
 COPY lib /squadov/lib
 COPY server /squadov/server
 COPY tools /squadov/tools
 COPY deps /squadov/deps
 COPY msa /squadov/msa
+COPY lambda /squadov/lambda
 COPY config/squadov_$DEPLOYMENT_ENVIRONMENT.toml /squadov/config/config.toml
 COPY Cargo.toml /squadov/
 COPY Cargo.lock /squadov/
 COPY devops/gcp /squadov/gcp
 
 WORKDIR /squadov
-RUN cargo build --release --bin singleton_event_processing_worker
+RUN cargo build --release --features=eventloop --bin singleton_event_processing_worker
 
 FROM debian:buster-20200908-slim
 ARG DEPLOYMENT_ENVIRONMENT

@@ -7,7 +7,6 @@ use uuid::Uuid;
 use sqlx::{Transaction, Postgres};
 use std::sync::Arc;
 use std::convert::TryFrom;
-use serde_qs::actix::QsQuery;
 
 impl api::ApiApplication {
     pub async fn create_hearthstone_duels_run(&self, tx: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, user_id: i64, start_time: &DateTime<Utc>) -> Result<Uuid, SquadOvError> {
@@ -208,7 +207,7 @@ pub async fn list_duel_runs_for_user_handler(data : web::Path<super::Hearthstone
     Ok(HttpResponse::Ok().json(api::construct_hal_pagination_response(runs, &req, &query, expected_total == got_total)?)) 
 }
 
-pub async fn list_matches_for_duel_run_handler(data : web::Path<super::HearthstoneCollectionGetInput>, app : web::Data<Arc<api::ApiApplication>>, filters: QsQuery<super::HearthstoneListQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_matches_for_duel_run_handler(data : web::Path<super::HearthstoneCollectionGetInput>, app : web::Data<Arc<api::ApiApplication>>, filters: web::Json<super::HearthstoneListQuery>) -> Result<HttpResponse, SquadOvError> {
     let matches = app.list_matches_for_duel_run(&data.collection_uuid, data.user_id, &filters).await?;
     Ok(HttpResponse::Ok().json(&matches))
 }

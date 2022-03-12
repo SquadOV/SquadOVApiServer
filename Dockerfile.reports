@@ -1,0 +1,27 @@
+FROM rustserverless/lambda-rust:0.4.0-rust-1.58.1 AS builder
+ARG DEPLOYMENT_ENVIRONMENT
+RUN yum install -y wget curl openssl-devel
+RUN yum groupinstall -y "Development Tools"
+RUN wget https://cmake.org/files/v3.18/cmake-3.18.0.tar.gz && \
+    tar -xvzf cmake-3.18.0.tar.gz && \
+    cd cmake-3.18.0 && \
+    ./bootstrap && \
+    make -j16 && \
+    make install
+RUN mkdir -p /squadov/config
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN rustup toolchain install 1.58.1 && rustup default 1.58.1
+
+COPY lib /squadov/lib
+COPY server /squadov/server
+COPY tools /squadov/tools
+COPY deps /squadov/deps
+COPY msa /squadov/msa
+COPY lambda /squadov/lambda
+COPY Cargo.toml /squadov/
+COPY Cargo.lock /squadov/
+COPY devops/gcp /squadov/gcp
+
+WORKDIR /squadov
+RUN cargo build --release -p combat_log_report_generator --target x86_64-unknown-linux-gnu

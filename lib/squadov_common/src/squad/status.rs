@@ -48,21 +48,6 @@ struct UserActivityChange {
     pub states: HashMap<i64, UserActivityState>,
 }
 
-// Message for when the user first registers that they want to listen for activity messages.
-#[derive(Message)]
-#[rtype(result="()")]
-struct UserActivityConnect {
-    pub id: Uuid,
-    pub addr: Recipient<UserActivityChange>,
-}
-
-// Message for when the user no longer wishes to listen for activity messages (all of them).
-#[derive(Message)]
-#[rtype(result="()")]
-struct UserActivityDisconnect {
-    pub id: Uuid,
-}
-
 // Request message for when the user wants to subscribe to the status of another user (can be denied).
 #[derive(Message)]
 #[rtype(result="()")]
@@ -70,25 +55,9 @@ struct UserActivitySubscribeRequest {
     pub user_id: Vec<i64>,
 }
 
-// Authoritative message for when the user wants to subscribe to the status of another user.
-#[derive(Message)]
-#[rtype(result="UserActivitySubscribeResponse")]
-struct UserActivitySubscribe {
-    pub session_id: Uuid,
-    pub user_id: Vec<i64>,
-}
-
 #[derive(MessageResponse, Serialize)]
 struct UserActivitySubscribeResponse {
     status: HashMap<i64, UserActivityState>
-}
-
-// Message for when the user wants to unsubscribe from the status of another user.
-#[derive(Message)]
-#[rtype(result="()")]
-struct UserActivityUnsubscribe {
-    pub session_id: Uuid,
-    pub user_id: Vec<i64>,
 }
 
 // TODO: This probably needs to be stored externally if we ever want to
@@ -158,7 +127,7 @@ impl UserActivityStatusTracker {
 
     async fn get_user_state(&self, user_id: i64) -> Result<UserActivityState, SquadOvError> {
         let mut conn = self.get_connection().await?;
-        let raw: Option<String> = deadpool_redis::cmd("GET")
+        let raw: Option<String> = deadpool_redis::redis::cmd("GET")
             .arg(&[&self.get_user_cache_key(user_id)])
             .query_async(&mut conn)
             .await?;
@@ -182,7 +151,7 @@ impl UserActivityStatusTracker {
 
     async fn get_multiple_user_states(&self, user_ids: &[i64]) -> Result<Vec<UserActivityState>, SquadOvError> {
         let mut conn = self.get_connection().await?;
-        let raw: Vec<Option<String>> = deadpool_redis::cmd("MGET")
+        let raw: Vec<Option<String>> = deadpool_redis::redis::cmd("MGET")
             .arg(user_ids.iter().map(|x| { self.get_user_cache_key(*x)}).collect::<Vec<_>>().as_slice())
             .query_async(&mut conn)
             .await?;
@@ -237,22 +206,22 @@ impl UserActivityStatusTracker {
 
         // Update user state in Redis.
         if state.activity == Activity::Offline {
-            deadpool_redis::cmd("DEL")
+            deadpool_redis::redis::cmd("DEL")
                 .arg(&[&self.get_user_cache_key(user_id)])
-                .execute_async(&mut conn)
+                .query_async(&mut conn)
                 .await?;
         } else {
-            deadpool_redis::cmd("SET")
+            deadpool_redis::redis::cmd("SET")
                 // If the user hasn't changed their status in a day they're fucking offline.
                 .arg(&[&self.get_user_cache_key(user_id), &serde_json::to_string(&state)?, "EX", "86400"])
-                .execute_async(&mut conn)
+                .query_async(&mut conn)
                 .await?;
         }
 
         // Notify everyone else of the user's state change via pub/sub using Redis.
-        deadpool_redis::cmd("PUBLISH")
+        deadpool_redis::redis::cmd("PUBLISH")
             .arg(&["user-status", &format!("{}", user_id)])
-            .execute_async(&mut conn)
+            .query_async(&mut conn)
             .await?;
         
         // Send updates to listening users as necessary.

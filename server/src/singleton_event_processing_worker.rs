@@ -13,13 +13,13 @@ struct Options {
     config: std::path::PathBuf,
     #[structopt(short, long)]
     db: u32,
+    #[structopt(short, long)]
+    workers: usize,
 }
 
-#[tokio::main]
-pub async fn main() -> Result<(), SquadOvError> {
+fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
-    std::env::set_var("RUST_LOG", "info,singleton_event_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info");
-    std::env::set_var("SQLX_LOG", "0");
+    std::env::set_var("RUST_LOG", "info,singleton_event_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info,sqlx=info");
     env_logger::init();
 
     let opts = Options::from_args();
@@ -38,14 +38,21 @@ pub async fn main() -> Result<(), SquadOvError> {
     config.rabbitmq.enable_sharing = false;
     config.rabbitmq.prefetch_count = 2;
 
-    // Only use the provided config to connect to things.
-    let _ = tokio::task::spawn(async move {
-        let app = Arc::new(api::ApiApplication::new(&config).await);
-        api::start_event_loop(app.clone());
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(opts.workers)
+        .build()
+        .unwrap()
+        .block_on(async move {
+            // Only use the provided config to connect to things.
+            tokio::task::spawn(async move {
+                let app = Arc::new(api::ApiApplication::new(&config, "singleton_event").await);
+                api::start_event_loop(app.clone());
 
-        loop {
-            async_std::task::sleep(std::time::Duration::from_secs(10)).await;
-        }
-    }).await;
-    Ok(())
+                loop {
+                    async_std::task::sleep(std::time::Duration::from_secs(10)).await;
+                }
+            }).await.unwrap();
+            Ok(())
+        })
 }

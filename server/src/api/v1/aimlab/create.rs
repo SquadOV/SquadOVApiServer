@@ -2,7 +2,7 @@ use squadov_common;
 use squadov_common::SquadOvGames;
 use squadov_common::AimlabTask;
 use crate::api;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use uuid::Uuid;
 use sqlx::{Transaction, Executor, Postgres};
 use serde::Serialize;

@@ -28,10 +28,6 @@ module "network" {
     domain_prefix = ""
 }
 
-module "iam" {
-    source = "../modules/iam"
-}
-
 module "db" {
     source = "../modules/db"
 
@@ -53,6 +49,13 @@ module "storage" {
 
     bucket_suffix = "-prod"
     cloudfront_suffix = ""
+}
+
+module "iam" {
+    source = "../modules/iam"
+
+    resource_suffix = "-prod"
+    api_gateway_id = ""
 }
 
 module "k8s" {

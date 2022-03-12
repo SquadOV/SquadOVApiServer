@@ -1,7 +1,7 @@
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use serde::{Serialize, Deserialize};
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use squadov_common::{
     SquadOvError,
     SquadOvGames,

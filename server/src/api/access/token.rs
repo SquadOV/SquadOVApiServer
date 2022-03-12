@@ -3,7 +3,7 @@ use std::task::{Context, Poll};
 use std::rc::Rc;
 use std::cell::RefCell;
 use actix_service::{Service, Transform};
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::{ok, Ready};
 use futures::Future;
 use std::boxed::Box;
@@ -28,14 +28,12 @@ impl ApiAccessToken {
     }
 }
 
-impl<S, B> Transform<S> for ApiAccessToken
+impl<S> Transform<S, ServiceRequest>  for ApiAccessToken
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type InitError = ();
     type Transform = ApiAccessTokenMiddleware<S>;
@@ -54,23 +52,21 @@ pub struct ApiAccessTokenMiddleware<S> {
     optional: bool,
 }
 
-impl<S, B> Service for ApiAccessTokenMiddleware<S>
+impl<S> Service<ServiceRequest> for ApiAccessTokenMiddleware<S>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.borrow_mut().poll_ready(cx)
     }
 
-    fn call(&mut self, req: ServiceRequest) -> Self::Future {
-        let mut srv = self.service.clone();
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let srv = self.service.clone();
         let is_optional = self.optional;
 
         Box::pin(async move {
@@ -97,12 +93,7 @@ where
                 }
             }
 
-            let resp = match ServiceRequest::from_parts(request, payload) {
-                Ok(x) => srv.call(x).await?,
-                Err(_) => return Err(actix_web::error::ErrorInternalServerError("Failed to reconstruct service request"))
-            };
-
-            Ok(resp)
+            Ok(srv.call(ServiceRequest::from_parts(request, payload)).await?)
         })
     }
 }

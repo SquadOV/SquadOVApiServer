@@ -8,7 +8,9 @@ members = [
     "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler",
-    "msa/devapi"
+    "msa/devapi",
+    "lambda/ff14_combat_log_parser",
+    "lambda/combat_log_report_generator"
 ]
 default-members = [
     "server",
@@ -19,6 +21,8 @@ default-members = [
     "tools/wow_match_view_data_backfill",
     "msa/rabbitmq_delay_handler",
     "msa/csgo_demo_handler",
-    "msa/devapi"
+    "msa/devapi",
+    "lambda/ff14_combat_log_parser",
+    "lambda/combat_log_report_generator"
 ]
 exclude = ["deps/cargo/rust-petname", "deps/cargo/sqlx"]

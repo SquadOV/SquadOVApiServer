@@ -4,7 +4,7 @@ pub use create::*;
 use uuid::Uuid;
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use squadov_common::{
     SquadOvError,
     SquadOvGames,
@@ -62,7 +62,6 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc, TimeZone, Duration};
 use std::collections::{HashMap};
 use serde::{Serialize, Deserialize};
-use serde_qs::actix::QsQuery;
 use crate::api::v1::{
     FavoriteResponse,
     UserProfilePath,
@@ -858,7 +857,7 @@ pub async fn get_vod_recent_match_handler(app : web::Data<Arc<api::ApiApplicatio
     }
 }
 
-async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiApplication>>, req: &HttpRequest, query: QsQuery<api::PaginationParameters>, mut filter: web::Json<RecentMatchQuery>, needs_access_tokens: bool) -> Result<HttpResponse, SquadOvError> {
+async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiApplication>>, req: &HttpRequest, query: web::Query<api::PaginationParameters>, mut filter: web::Json<RecentMatchQuery>, needs_access_tokens: bool) -> Result<HttpResponse, SquadOvError> {
     if needs_access_tokens {
         filter.users = Some(vec![user_id]);
     }
@@ -880,7 +879,7 @@ async fn get_recent_matches_for_user(user_id: i64, app : web::Data<Arc<api::ApiA
     Ok(HttpResponse::Ok().json(api::construct_hal_pagination_response(&matches, req, &query, expected_total == got_total)?)) 
 }
 
-pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiApplication>>, req: HttpRequest, query: web::Query<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
     let extensions = req.extensions();
     let session = match extensions.get::<SquadOVSession>() {
         Some(s) => s,
@@ -890,7 +889,7 @@ pub async fn get_recent_matches_for_me_handler(app : web::Data<Arc<api::ApiAppli
     get_recent_matches_for_user(session.user.id, app, &req, query, filter, false).await
 }
 
-pub async fn get_profile_matches_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<UserProfilePath>, req: HttpRequest, query: QsQuery<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_profile_matches_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<UserProfilePath>, req: HttpRequest, query: web::Query<api::PaginationParameters>, filter: web::Json<RecentMatchQuery>) -> Result<HttpResponse, SquadOvError> {
     get_recent_matches_for_user(path.profile_id, app, &req, query, filter, true).await
 }
 
@@ -901,12 +900,6 @@ pub struct MatchShareSignatureData {
     game: SquadOvGames,
     graphql_stats: Option<Vec<StatPermission>>,
     user_id: i64,
-}
-
-#[derive(Deserialize,Debug)]
-#[serde(rename_all="camelCase")]
-pub struct MatchSharePermQuery {
-    game: SquadOvGames,
 }
 
 pub async fn get_match_share_connections_handler(app : web::Data<Arc<api::ApiApplication>>, path: web::Path<GenericMatchPathInput>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {

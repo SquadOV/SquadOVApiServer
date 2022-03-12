@@ -22,7 +22,7 @@ use crate::{
 };
 use std::sync::{Arc};
 use std::io::{self, BufReader};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempPath};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use md5::{Md5, Digest};
@@ -253,12 +253,18 @@ pub enum VodProcessingTask {
         vod_uuid: Uuid,
         session_id: Option<String>,
         id: Option<String>,
-    }
+    },
+    GeneratePreview{
+        vod_uuid: Uuid,
+    },
+    GenerateThumbnail{
+        vod_uuid: Uuid,
+    },
 }
 
 #[async_trait]
 impl RabbitMqListener for VodProcessingInterface {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
+    async fn handle(&self, data: &[u8], _queue: &str) -> Result<(), SquadOvError> {
         log::info!("Handle VOD Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
         let task: VodProcessingTask = serde_json::from_slice(data)?;
         match task {
@@ -266,7 +272,9 @@ impl RabbitMqListener for VodProcessingInterface {
                 &vod_uuid,
                 &id.unwrap_or(String::from("source")),
                 session_id.as_ref(),
-            ).await?, 
+            ).await?,
+            VodProcessingTask::GeneratePreview{vod_uuid} => self.generate_preview(&vod_uuid).await?,
+            VodProcessingTask::GenerateThumbnail{vod_uuid} => self.generate_thumbnail(&vod_uuid).await?,
         };
         Ok(())
     }
@@ -291,13 +299,117 @@ impl VodProcessingInterface {
         Ok(())
     }
 
-    pub async fn process_vod(&self, vod_uuid: &Uuid, id: &str, session_id: Option<&String>) -> Result<(), SquadOvError> {
-        log::info!("Start Processing VOD {} [{:?}]", vod_uuid, session_id);
+    pub async fn request_generate_preview(&self, vod_uuid: & Uuid) -> Result<(), SquadOvError> {
+        self.rmq.publish(&self.queue, serde_json::to_vec(&VodProcessingTask::GeneratePreview{
+            vod_uuid: vod_uuid.clone(),
+        })?, RABBITMQ_DEFAULT_PRIORITY, VOD_MAX_AGE_SECONDS).await;
+        Ok(())
+    }
 
-        log::info!("Get VOD Association");
+    pub async fn request_generate_thumbnail(&self, vod_uuid: & Uuid) -> Result<(), SquadOvError> {
+        self.rmq.publish(&self.queue, serde_json::to_vec(&VodProcessingTask::GenerateThumbnail{
+            vod_uuid: vod_uuid.clone(),
+        })?, RABBITMQ_DEFAULT_PRIORITY, VOD_MAX_AGE_SECONDS).await;
+        Ok(())
+    }
+
+    async fn download_vod_locally(&self, vod_uuid: &Uuid, context: &str) -> Result<(VodAssociation, VodMetadata, TempPath), SquadOvError> {
+        log::info!("[{}] Get VOD Association {}", context, vod_uuid);
         let vod = db::get_vod_association(&*self.db, vod_uuid).await?;
 
-        log::info!("Get Container Extension");
+        log::info!("[{}] Generate Preview for VOD {}", context, vod_uuid);
+        let metadata = db::get_vod_metadata(&*self.db, vod_uuid, "source").await?;
+
+        log::info!("[{}] Get VOD Manager {}", context, vod_uuid);
+        let manager = self.vod.get_bucket(&metadata.bucket).await.ok_or(SquadOvError::InternalError(format!("Invalid bucket: {}", &metadata.bucket)))?;
+
+        let input_filename = NamedTempFile::new()?.into_temp_path();
+        log::info!("[{}] Download VOD - {}", context, vod_uuid);
+        let source_segment_id = VodSegmentId{
+            video_uuid: vod_uuid.clone(),
+            quality: String::from("source"),
+            segment_name: String::from("fastify.mp4"),
+        };      
+        manager.download_vod_to_path(&source_segment_id, &input_filename).await?;
+        Ok((vod, metadata, input_filename))
+    }
+
+    pub async fn generate_preview(&self, vod_uuid: &Uuid) -> Result<(), SquadOvError> {
+        let (vod, metadata, input_filename) = self.download_vod_locally(vod_uuid, "Preview").await?;
+
+        let preview_filename = NamedTempFile::new()?.into_temp_path();
+        // Get VOD length in seconds - we use this to manually determine where to clip.
+        let length_seconds = vod.end_time.unwrap_or(Utc::now()).signed_duration_since(vod.start_time.unwrap_or(Utc::now())).num_seconds();
+
+        log::info!("[Preview] Generate Preview Mp4 - {}", vod_uuid);
+        preview::generate_vod_preview(input_filename.as_os_str().to_str().ok_or(SquadOvError::BadRequest)?, &preview_filename, length_seconds).await?;
+
+        log::info!("[Preview] Upload Preview VOD - {}", vod_uuid);
+        let manager = self.vod.get_bucket(&metadata.bucket).await.ok_or(SquadOvError::InternalError(format!("Invalid bucket: {}", &metadata.bucket)))?;
+        manager.upload_vod_from_file(&VodSegmentId{
+            video_uuid: vod_uuid.clone(),
+            quality: String::from("source"),
+            segment_name: String::from("preview.mp4"),
+        }, &preview_filename).await?;
+
+        log::info!("[Preview] Process VOD TX (Begin) - {}", vod_uuid);
+        let mut tx = self.db.begin().await?;
+
+        log::info!("[Preview] Mark DB Preview (Query) - {}", vod_uuid);
+        db::mark_vod_with_preview(&mut tx, vod_uuid).await?;
+        log::info!("[Preview] Process VOD TX (Commit) - {}", vod_uuid);
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn generate_thumbnail(&self, vod_uuid: &Uuid) -> Result<(), SquadOvError> {
+        let (vod, metadata, input_filename) = self.download_vod_locally(vod_uuid, "Thumbnail").await?;
+
+        let thumbnail_filename = NamedTempFile::new()?.into_temp_path();
+        // Get VOD length in seconds - we use this to manually determine where to clip.
+        let length_seconds = vod.end_time.unwrap_or(Utc::now()).signed_duration_since(vod.start_time.unwrap_or(Utc::now())).num_seconds();
+
+        log::info!("[Thumbnail] Generate Thumbnail - {}", vod_uuid);
+        preview::generate_vod_thumbnail(input_filename.as_os_str().to_str().ok_or(SquadOvError::BadRequest)?, &thumbnail_filename, length_seconds).await?;
+
+        log::info!("[Thumbnail] Upload Thumbnail - {}", vod_uuid);
+        let manager = self.vod.get_bucket(&metadata.bucket).await.ok_or(SquadOvError::InternalError(format!("Invalid bucket: {}", &metadata.bucket)))?;
+        let thumbnail_id = VodSegmentId{
+            video_uuid: vod_uuid.clone(),
+            quality: String::from("source"),
+            segment_name: String::from("thumbnail.jpg"),
+        };
+        manager.upload_vod_from_file(&thumbnail_id, &thumbnail_filename).await?;
+
+        log::info!("[Thumbnail] Process VOD TX (Begin) - {}", vod_uuid);
+        let mut tx = self.db.begin().await?;
+
+        log::info!("[Thumbnail] Add DB Thumbnail (Query) - {}", vod_uuid);
+        {
+            let file = std::fs::File::open(&thumbnail_filename)?;
+            let image = image::io::Reader::with_format(BufReader::new(file), image::ImageFormat::Jpeg);
+            let thumbnail_dims = image.into_dimensions()?;
+            db::add_vod_thumbnail(&mut tx, vod_uuid, &metadata.bucket, &thumbnail_id, thumbnail_dims.0 as i32, thumbnail_dims.1 as i32).await?;
+        }
+
+        log::info!("[Thumbnail] Check if VOD is Public - {}", vod_uuid);
+        if db::check_if_vod_public(&*self.db, vod_uuid).await? {
+            log::info!("[Thumbnail] Setting Thumbnail as Public - {}", vod_uuid);
+            manager.make_segment_public(&thumbnail_id).await?;
+        }
+
+        log::info!("[Thumbnail] Process VOD TX (Commit) - {}", vod_uuid);
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn process_vod(&self, vod_uuid: &Uuid, id: &str, session_id: Option<&String>) -> Result<(), SquadOvError> {
+        log::info!("[Fastify] Start Processing VOD {} [{:?}]", vod_uuid, session_id);
+
+        log::info!("[Fastify] Get VOD Association");
+        let vod = db::get_vod_association(&*self.db, vod_uuid).await?;
+
+        log::info!("[Fastify] Get Container Extension");
         let raw_extension = container_format_to_extension(&vod.raw_container_format);
         let source_segment_id = VodSegmentId{
             video_uuid: vod_uuid.clone(),
@@ -306,11 +418,11 @@ impl VodProcessingInterface {
         };
 
         // Need to grab the metadata so we know where this VOD was stored.
-        log::info!("Get VOD Metadata");
+        log::info!("[Fastify] Get VOD Metadata");
         let metadata = db::get_vod_metadata(&*self.db, vod_uuid, id).await?;
 
         // Grab the appropriate VOD manager. The manager should already exist!
-        log::info!("Get VOD Manager");
+        log::info!("[Fastify] Get VOD Manager");
         let manager = self.vod.get_bucket(&metadata.bucket).await.ok_or(SquadOvError::InternalError(format!("Invalid bucket: {}", &metadata.bucket)))?;
 
         // Note that we can only proceed with "fastifying" the VOD if the entire VOD has been uploaded.
@@ -325,38 +437,26 @@ impl VodProcessingInterface {
             }
         } 
 
-        // We do *ALL* processing on the VOD here (for better or worse).
+        // We only do the "fastify" process here. Other jobs get farmed out to separate tasks
+        // to ensure that the "processing" doesn't fail if the thumbnail failed to generate for example.
         // 1) Download the VOD to disk using the VOD manager (I think this gets us
         //    faster DL speed than using FFMPEG directly).
         // 2) Convert the video using the vod.fastify module. This gets us a VOD
         //    that has the faststart flag.
-        // 3) Generate a preview of the VOD.
-        // 4) Upload the processed video and the preview using the VOD manager.
-        // 5) Mark the video as being "fastified" (I really need a better word).
-        // 6) Mark the video as having a preview.
-        log::info!("Generate Input Temp File");
+        // 3) Upload the processed video using the VOD manager.
+        // 4) Mark the video as being "fastified" (I really need a better word).
+        log::info!("[Fastify] Generate Input Temp File");
         let input_filename = NamedTempFile::new()?.into_temp_path();
-        log::info!("Download VOD - {}", vod_uuid);
+        log::info!("[Fastify] Download VOD - {}", vod_uuid);
         
         manager.download_vod_to_path(&source_segment_id, &input_filename).await?;
 
         let fastify_filename = NamedTempFile::new()?.into_temp_path();
-        let preview_filename = NamedTempFile::new()?.into_temp_path();
-        let thumbnail_filename = NamedTempFile::new()?.into_temp_path();
 
-        log::info!("Fastify Mp4 - {}", vod_uuid);
+        log::info!("[Fastify] Fastify Mp4 - {}", vod_uuid);
         fastify::fastify_mp4(input_filename.as_os_str().to_str().ok_or(SquadOvError::BadRequest)?, &vod.raw_container_format, &fastify_filename).await?;
 
-        // Get VOD length in seconds - we use this to manually determine where to clip.
-        let length_seconds = vod.end_time.unwrap_or(Utc::now()).signed_duration_since(vod.start_time.unwrap_or(Utc::now())).num_seconds();
-
-        log::info!("Generate Preview Mp4 - {}", vod_uuid);
-        preview::generate_vod_preview(fastify_filename.as_os_str().to_str().ok_or(SquadOvError::BadRequest)?, &preview_filename, length_seconds).await?;
-
-        log::info!("Generate Thumbnail - {}", vod_uuid);
-        preview::generate_vod_thumbnail(fastify_filename.as_os_str().to_str().ok_or(SquadOvError::BadRequest)?, &thumbnail_filename, length_seconds).await?;
-
-        log::info!("Upload Fastify VOD - {}", vod_uuid);
+        log::info!("[Fastify] Upload Fastify VOD - {}", vod_uuid);
         let fastify_segment = VodSegmentId{
             video_uuid: vod_uuid.clone(),
             quality: String::from("source"),
@@ -364,36 +464,12 @@ impl VodProcessingInterface {
         };
         manager.upload_vod_from_file(&fastify_segment, &fastify_filename).await?;
 
-        log::info!("Upload Preview VOD - {}", vod_uuid);
-        manager.upload_vod_from_file(&VodSegmentId{
-            video_uuid: vod_uuid.clone(),
-            quality: String::from("source"),
-            segment_name: String::from("preview.mp4"),
-        }, &preview_filename).await?;
-
-        log::info!("Upload Thumbnail - {}", vod_uuid);
-        let thumbnail_id = VodSegmentId{
-            video_uuid: vod_uuid.clone(),
-            quality: String::from("source"),
-            segment_name: String::from("thumbnail.jpg"),
-        };
-        manager.upload_vod_from_file(&thumbnail_id, &thumbnail_filename).await?;
-
-        log::info!("Process VOD TX (Begin) - {}", vod_uuid);
+        log::info!("[Fastify] Process VOD TX (Begin) - {}", vod_uuid);
         let mut tx = self.db.begin().await?;
-        log::info!("Mark DB Fastify (Query) - {}", vod_uuid);
+        log::info!("[Fastify] Mark DB Fastify (Query) - {}", vod_uuid);
         db::mark_vod_as_fastify(&mut tx, vod_uuid).await?;
-        log::info!("Mark DB Preview (Query) - {}", vod_uuid);
-        db::mark_vod_with_preview(&mut tx, vod_uuid).await?;
-        log::info!("Add DB Thumbnail (Query) - {}", vod_uuid);
-        {
-            let file = std::fs::File::open(&thumbnail_filename)?;
-            let image = image::io::Reader::with_format(BufReader::new(file), image::ImageFormat::Jpeg);
-            let thumbnail_dims = image.into_dimensions()?;
-            db::add_vod_thumbnail(&mut tx, vod_uuid, &metadata.bucket, &thumbnail_id, thumbnail_dims.0 as i32, thumbnail_dims.1 as i32).await?;
-        }
 
-        log::info!("Computing VOD MD5 - {}", vod_uuid);
+        log::info!("[Fastify] Computing VOD MD5 - {}", vod_uuid);
         let md5_hash = {
             let mut file = std::fs::File::open(&fastify_filename)?;
             let mut hasher = Md5::default();
@@ -401,27 +477,29 @@ impl VodProcessingInterface {
             base64::encode(hasher.finalize())
         };
 
-        log::info!("Store VOD MD5 - {}", vod_uuid);
+        log::info!("[Fastify] Store VOD MD5 - {}", vod_uuid);
         db::store_vod_md5(&mut tx, vod_uuid, &md5_hash).await?;
 
-        log::info!("Process VOD TX (Commit) - {}", vod_uuid);
+        log::info!("[Fastify] Process VOD TX (Commit) - {}", vod_uuid);
         tx.commit().await?;
-        log::info!("Delete Source VOD - {}", vod_uuid);
+
+        log::info!("[Fastify] Delete Source VOD - {}", vod_uuid);
         match manager.delete_vod(&source_segment_id).await {
             Ok(()) => (),
             Err(err) => log::warn!("Failed to delete source VOD: {}", err),
         };
 
-        log::info!("Check if VOD is Public - {}", vod_uuid);
+        log::info!("[Fastify] Check if VOD is Public - {}", vod_uuid);
         if db::check_if_vod_public(&*self.db, vod_uuid).await? {
             log::info!("Setting Fastify as Public - {}", vod_uuid);
             manager.make_segment_public(&fastify_segment).await?;
-
-            log::info!("Setting Thumbnail as Public - {}", vod_uuid);
-            manager.make_segment_public(&thumbnail_id).await?;
         }
 
-        log::info!("Finish Fastifying {:?}", vod_uuid);
+        log::info!("[Fastify] Dispatch Jobs - {}", vod_uuid);
+        self.request_generate_preview(vod_uuid).await?;
+        self.request_generate_thumbnail(vod_uuid).await?;
+
+        log::info!("[Fastify] Finish Fastifying {:?}", vod_uuid);
         Ok(())
     }
 }

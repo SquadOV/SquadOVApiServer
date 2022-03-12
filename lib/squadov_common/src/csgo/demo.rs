@@ -1,12 +1,20 @@
-use nom::number::streaming::{
-    le_i32,
-    le_f32,
-    le_u8,
-    le_u32,
-    le_u64,
-    be_u32,
-    be_u64,
-    be_i32,
+use nom::{
+    IResult,
+    number::streaming::{
+        le_i32,
+        le_f32,
+        le_u8,
+        le_u32,
+        le_u64,
+        be_u32,
+        be_u64,
+        be_i32,
+    },
+    bytes::streaming::{
+        take,
+    },
+    combinator::map_res,
+    multi::many_m_n,
 };
 use crate::proto::csgo::{
     CsvcMsgGameEvent,
@@ -72,34 +80,33 @@ impl Default for CsgoDemoHeader {
     }
 }
 
-named!(pub parse_csgo_demo_header<CsgoDemoHeader>,
-    complete!(do_parse!(
-        demo_filestamp: take_str!(8) >>
-        demo_protocol: le_i32 >>
-        network_protocol: le_i32 >>
-        server_name: take_str!(260) >>
-        client_name: take_str!(260) >>
-        map_name: take_str!(260) >>
-        game_directory: take_str!(260) >>
-        playback_time: le_f32 >>
-        playback_ticks: le_i32 >>
-        playback_frames: le_i32 >>
-        signon_length: le_i32 >>
-        (CsgoDemoHeader{
-            demo_filestamp: String::from(demo_filestamp).trim_end_matches(char::from(0)).to_string(),
-            demo_protocol: demo_protocol,
-            network_protocol: network_protocol,
-            server_name: String::from(server_name).trim_end_matches(char::from(0)).to_string(),
-            client_name: String::from(client_name).trim_end_matches(char::from(0)).to_string(),
-            map_name: String::from(map_name).trim_end_matches(char::from(0)).to_string(),
-            game_directory: String::from(game_directory).trim_end_matches(char::from(0)).to_string(),
-            playback_time: playback_time,
-            playback_ticks: playback_ticks,
-            playback_frames: playback_frames,
-            signon_length: signon_length,
-        })
-    ))
-);
+pub fn parse_csgo_demo_header(input: &[u8]) -> IResult<&[u8], CsgoDemoHeader> {
+    let (input, demo_filestamp) = map_res(take(8usize), std::str::from_utf8)(input)?;
+    let (input, demo_protocol) = le_i32(input)?;
+    let (input, network_protocol) = le_i32(input)?;
+    let (input, server_name) = map_res(take(260usize), std::str::from_utf8)(input)?;
+    let (input, client_name) = map_res(take(260usize), std::str::from_utf8)(input)?;
+    let (input, map_name) = map_res(take(260usize), std::str::from_utf8)(input)?;
+    let (input, game_directory) = map_res(take(260usize), std::str::from_utf8)(input)?;
+    let (input, playback_time) = le_f32(input)?;
+    let (input, playback_ticks) = le_i32(input)?;
+    let (input, playback_frames) = le_i32(input)?;
+    let (input, signon_length) = le_i32(input)?;
+
+    Ok((input, CsgoDemoHeader{
+        demo_filestamp: String::from(demo_filestamp).trim_end_matches(char::from(0)).to_string(),
+        demo_protocol,
+        network_protocol,
+        server_name: String::from(server_name).trim_end_matches(char::from(0)).to_string(),
+        client_name: String::from(client_name).trim_end_matches(char::from(0)).to_string(),
+        map_name: String::from(map_name).trim_end_matches(char::from(0)).to_string(),
+        game_directory: String::from(game_directory).trim_end_matches(char::from(0)).to_string(),
+        playback_time: playback_time,
+        playback_ticks: playback_ticks,
+        playback_frames: playback_frames,
+        signon_length: signon_length,
+    }))
+}
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -131,29 +138,27 @@ pub struct CsgoDemoCmdHeader {
     pub player_slot: u8,
 }
 
-named!(pub parse_csgo_demo_cmd_header<CsgoDemoCmdHeader>,
-    complete!(do_parse!(
-        cmd: switch!(le_u8,
-            1 => value!(CsgoDemoCmdMessage::SignOn) |
-            2 => value!(CsgoDemoCmdMessage::Packet) |
-            3 => value!(CsgoDemoCmdMessage::SyncTick) |
-            4 => value!(CsgoDemoCmdMessage::ConsoleCmd) |
-            5 => value!(CsgoDemoCmdMessage::UserCmd) |
-            6 => value!(CsgoDemoCmdMessage::DataTables) |
-            7 => value!(CsgoDemoCmdMessage::Stop) |
-            8 => value!(CsgoDemoCmdMessage::CustomData) |
-            9 => value!(CsgoDemoCmdMessage::StringTables) |
-            _ => value!(CsgoDemoCmdMessage::Stop)
-        ) >>
-        tick: le_i32 >>
-        player_slot: le_u8 >>
-        (CsgoDemoCmdHeader{
-            cmd: cmd,
-            tick: tick,
-            player_slot: player_slot,
-        })
-    ))
-);
+pub fn parse_csgo_demo_cmd_header(input: &[u8]) -> IResult<&[u8], CsgoDemoCmdHeader> {
+    let (input, cmd) = le_u8(input)?;
+    let (input, tick) = le_i32(input)?;
+    let (input, player_slot) = le_u8(input)?;
+    Ok((input, CsgoDemoCmdHeader{
+        cmd: match cmd {
+            1 => CsgoDemoCmdMessage::SignOn,
+            2 => CsgoDemoCmdMessage::Packet,
+            3 => CsgoDemoCmdMessage::SyncTick,
+            4 => CsgoDemoCmdMessage::ConsoleCmd,
+            5 => CsgoDemoCmdMessage::UserCmd,
+            6 => CsgoDemoCmdMessage::DataTables,
+            7 => CsgoDemoCmdMessage::Stop,
+            8 => CsgoDemoCmdMessage::CustomData,
+            9 => CsgoDemoCmdMessage::StringTables,
+            _ => CsgoDemoCmdMessage::Stop,
+        },
+        tick,
+        player_slot,
+    }))
+}
 
 #[derive(Debug)]
 pub struct CsgoDemoCmdSplitInfo {
@@ -166,40 +171,36 @@ pub struct CsgoDemoCmdSplitInfo {
     pub local_view_angles_2: CsgoQAngle,
 }
 
-named!(parse_csgo_demo_cmd_split_info<CsgoDemoCmdSplitInfo>,
-    complete!(do_parse!(
-        flags: le_i32 >>
-        view_origin: parse_csgo_vector >>
-        view_angles: parse_csgo_qangle >>
-        local_view_angles: parse_csgo_qangle >>
-        view_origin_2: parse_csgo_vector >>
-        view_angles_2: parse_csgo_qangle >>
-        local_view_angles_2: parse_csgo_qangle >>
-        (CsgoDemoCmdSplitInfo{
-            flags: flags,
-            view_origin: view_origin,
-            view_angles: view_angles,
-            local_view_angles: local_view_angles,
-            view_origin_2: view_origin_2,
-            view_angles_2: view_angles_2,
-            local_view_angles_2: local_view_angles_2,
-        })
-    ))
-);
+pub fn parse_csgo_demo_cmd_split_info(input: &[u8]) -> IResult<&[u8], CsgoDemoCmdSplitInfo> {
+    let (input, flags) = le_i32(input)?;
+    let (input, view_origin) = parse_csgo_vector(input)?;
+    let (input, view_angles) = parse_csgo_qangle(input)?;
+    let (input, local_view_angles) = parse_csgo_qangle(input)?;
+    let (input, view_origin_2) = parse_csgo_vector(input)?;
+    let (input, view_angles_2) = parse_csgo_qangle(input)?;
+    let (input, local_view_angles_2) = parse_csgo_qangle(input)?;
+    Ok((input, CsgoDemoCmdSplitInfo{
+        flags,
+        view_origin,
+        view_angles,
+        local_view_angles,
+        view_origin_2,
+        view_angles_2,
+        local_view_angles_2,
+    }))
+}
 
 #[derive(Debug)]
 pub struct CsgoDemoCmdInfo {
     pub splits: Vec<CsgoDemoCmdSplitInfo>
 }
 
-named!(pub parse_csgo_demo_cmd_info<CsgoDemoCmdInfo>,
-    complete!(do_parse!(
-        splits: many_m_n!(2, 2, parse_csgo_demo_cmd_split_info) >>
-        (CsgoDemoCmdInfo{
-            splits: splits,
-        })
-    ))
-);
+pub fn parse_csgo_demo_cmd_info(input: &[u8]) -> IResult<&[u8], CsgoDemoCmdInfo> {
+    let (input, splits) = many_m_n(2, 2, parse_csgo_demo_cmd_split_info)(input)?;
+    Ok((input, CsgoDemoCmdInfo{
+        splits,
+    }))
+}
 
 #[derive(Debug)]
 pub struct CsgoDemoPacketMessage {
@@ -207,17 +208,15 @@ pub struct CsgoDemoPacketMessage {
     pub payload: Vec<u8>,
 }
 
-named!(parse_csgo_demo_packet_message<CsgoDemoPacketMessage>,
-    complete!(do_parse!(
-        cmd: le_i32 >>
-        sz: le_i32 >>
-        payload: take!(sz) >>
-        (CsgoDemoPacketMessage{
-            cmd: cmd,
-            payload: payload.to_vec(),
-        })
-    ))
-);
+pub fn parse_csgo_demo_packet_message(input: &[u8]) -> IResult<&[u8], CsgoDemoPacketMessage> {
+    let (input, cmd) = le_i32(input)?;
+    let (input, sz) = le_i32(input)?;
+    let (input, payload) = take(sz as usize)(input)?;
+    Ok((input, CsgoDemoPacketMessage{
+        cmd,
+        payload: payload.to_vec(),
+    }))
+}
 
 #[derive(Debug, Clone, Copy, Serialize_repr, TryFromPrimitive)]
 #[repr(i32)]
@@ -440,6 +439,7 @@ impl CsgoDemoRound {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug,Clone)]
 pub struct CsgoDemoStringTable {
     name: String,
@@ -449,6 +449,7 @@ pub struct CsgoDemoStringTable {
     user_data_fixed_size: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug,Clone)]
 pub struct CsgoDemoPlayerInfo {
     version: u64,
@@ -466,39 +467,38 @@ pub struct CsgoDemoPlayerInfo {
     entity_id: i32,
 }
 
-named!(parse_csgo_demo_player_info<CsgoDemoPlayerInfo>,
-    complete!(do_parse!(
-        version: le_u64 >>
-        xuid: be_u64 >>
-        name: take_str!(128) >>
-        user_id: be_i32 >>
-        guid: take_str!(33) >>
-        p1: take!(3) >>
-        friends_id: be_u32 >>
-        friends_name: take_str!(128) >>
-        fake_player: le_u8 >>
-        is_hltv: le_u8 >>
-        p2: take!(2) >>
-        custom_files: many_m_n!(4, 4, le_u32) >>
-        files_downloaded: le_u8 >>
-        p3: take!(3) >>
-        (CsgoDemoPlayerInfo{
-            version: version,
-            xuid: xuid,
-            name: String::from(name).trim_end_matches(char::from(0)).to_string(),
-            user_id: user_id,
-            guid: String::from(guid).trim_end_matches(char::from(0)).to_string(),
-            friends_id: friends_id,
-            friends_name: String::from(friends_name).trim_end_matches(char::from(0)).to_string(),
-            fake_player: fake_player > 0,
-            is_hltv: is_hltv > 0,
-            custom_files: custom_files,
-            files_downloaded: files_downloaded,
-            // Entity ID is **NOT** serialized by Valve so we don't need to read it here.
-            entity_id: -1,
-        })
-    ))
-);
+pub fn parse_csgo_demo_player_info(input: &[u8]) -> IResult<&[u8], CsgoDemoPlayerInfo> {
+    let (input, version) = le_u64(input)?;
+    let (input, xuid) = be_u64(input)?;
+    let (input, name) = map_res(take(128usize), std::str::from_utf8)(input)?;
+    let (input, user_id) = be_i32(input)?;
+    let (input, guid) = map_res(take(33usize), std::str::from_utf8)(input)?;
+    let (input, _p1) = take(3usize)(input)?;
+    let (input, friends_id) = be_u32(input)?;
+    let (input, friends_name) = map_res(take(128usize), std::str::from_utf8)(input)?;
+    let (input, fake_player) = le_u8(input)?;
+    let (input, is_hltv) = le_u8(input)?;
+    let (input, _p2) = take(2usize)(input)?;
+    let (input, custom_files) = many_m_n(4, 4, le_u32)(input)?;
+    let (input, files_downloaded) = le_u8(input)?;
+    let (input, _p3) = take(3usize)(input)?;
+
+    Ok((input, CsgoDemoPlayerInfo{
+        version,
+        xuid,
+        name: String::from(name).trim_end_matches(char::from(0)).to_string(),
+        user_id,
+        guid: String::from(guid).trim_end_matches(char::from(0)).to_string(),
+        friends_id,
+        friends_name: String::from(friends_name).trim_end_matches(char::from(0)).to_string(),
+        fake_player: fake_player > 0,
+        is_hltv: is_hltv > 0,
+        custom_files,
+        files_downloaded,
+        // Entity ID is **NOT** serialized by Valve so we don't need to read it here.
+        entity_id: -1,
+    }))
+}
 
 // Note that this is not a byte-by-byte representation of the CS:GO demo
 // (aside from the header). It's meant to be a slimmed down representation

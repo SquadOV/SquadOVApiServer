@@ -11,14 +11,19 @@ import json
 
 finalData = None
 for b in bins:
-    subprocess.call([
+
+    args = [
         "cargo",
         "sqlx",
         "prepare",
         "--",
         "--bin",
         b
-    ])
+    ]
+
+    if b == 'singleton_event_processing_worker':
+        args.append('--features=eventloop')
+    subprocess.call(args)
 
     dataFname = '{}.json'.format(b)
     os.replace('sqlx-data.json', dataFname)

@@ -203,7 +203,7 @@ resource "aws_db_proxy" "primary_db_proxy" {
     name = "${var.postgres_instance_name}-proxy"
     debug_logging = false
     engine_family = "POSTGRESQL"
-    idle_client_timeout = 600
+    idle_client_timeout = 1800
     require_tls = true
     role_arn = aws_iam_role.rds_proxy_role.arn
     vpc_subnet_ids = var.postgres_db_subnets
@@ -253,4 +253,12 @@ resource "aws_elasticache_cluster" "redis" {
     engine_version = "6.x"
     port = 6379
     subnet_group_name = aws_elasticache_subnet_group.redis_subnet.name
+}
+
+output "db_secret" {
+    value = aws_secretsmanager_secret.primary_db_credentials_secret.id
+}
+
+output "db_host" {
+    value = aws_db_proxy_endpoint.primary_db_proxy_endpoint.endpoint
 }

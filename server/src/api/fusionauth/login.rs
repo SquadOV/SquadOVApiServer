@@ -40,9 +40,6 @@ pub enum FusionAuthLoginError {
 struct FusionAuthLoginChangePassword {
     #[serde(rename = "changePasswordId")]
     change_password_id: String,
-
-    #[serde(rename = "changePasswordReason")]
-    change_password_reason: String
 }
 
 #[derive(Deserialize,Debug)]

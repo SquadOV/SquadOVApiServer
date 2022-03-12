@@ -1,3 +1,3 @@
-commitHash: 71281937ae5acc58ecab70857dcb037e0af4f7c2
+commitHash: 261b1d3fd8bcb432f90d8183599a4782e6270fa5
 environment: "production"
-replicas: 72
+replicas: 56

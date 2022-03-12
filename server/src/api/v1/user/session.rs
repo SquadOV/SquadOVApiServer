@@ -1,5 +1,5 @@
 use squadov_common::{SquadOvError, SerializedUserSession, SessionJwtClaims};
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use std::sync::Arc;

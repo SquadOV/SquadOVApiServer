@@ -6,7 +6,9 @@ tenant_id = "${FUSIONAUTH_TENANT_ID}"
 application_id = "${FUSIONAUTH_CLIENT_ID}"
 
 [database]
-url = "${DATABASE_URL}"
+host = "${DATABASE_HOST}"
+username = "${POSTGRES_USER}"
+password = "${POSTGRES_PASSWORD}"
 connections = 256
 heavy_connections = 128
 
@@ -112,10 +114,15 @@ prefetch_count = 2
 rso_queue = "riot_rso"
 enable_valorant = false
 valorant_queue = "valorant_api"
+valorant_workers = 4
+failover_valorant_queue = "failover_valorant_api"
+failover_valorant_workers = 8
 enable_lol = false
 lol_queue = "lol_api"
+lol_workers = 2
 enable_tft = false
 tft_queue = "tft_api"
+tft_workers = 4
 enable_vod = false
 vod_queue = "squadov_vods"
 enable_csgo = false
@@ -162,6 +169,8 @@ legacy = ""
 enabled = true
 credential_path = "aws/api.profile"
 profile = "api"
+region = "us-east-2"
+account_id = ""
 
 [aws.cdn]
 public_cdn_domain = "https://d1goqoukzs4rbo.cloudfront.net"
@@ -169,6 +178,10 @@ private_cdn_domain = "https://d2chagikgdm7bl.cloudfront.net"
 blob_cdn_domain = "https://d395ja7261zvra.cloudfront.net"
 public_key_id = "K1JG8A4WKH1W0X"
 private_key_fname = "aws/private_s3_vod_cloudfront.pem"
+
+[aws.cognito]
+pool_id = ""
+provider = ""
 
 [ipstack]
 api_key = "${IPSTACK_API_KEY}"
@@ -193,3 +206,6 @@ timeout_ms = 30000
 [zendesk]
 email = "mike@squadov.gg"
 api_key = "${ZENDESK_API_KEY}"
+
+[combatlog]
+hostname = "${COMBAT_LOG_HOSTNAME}"

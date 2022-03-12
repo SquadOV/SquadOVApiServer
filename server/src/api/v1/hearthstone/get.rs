@@ -17,7 +17,7 @@ use squadov_common::vod::VodAssociation;
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use crate::api::v1::GenericMatchPathInput;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use std::sync::Arc;
 use uuid::Uuid;
 use std::convert::TryFrom;

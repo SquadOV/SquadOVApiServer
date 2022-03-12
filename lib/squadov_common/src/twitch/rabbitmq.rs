@@ -55,7 +55,7 @@ impl TwitchApiRabbitmqInterface {
 
 #[async_trait]
 impl RabbitMqListener for TwitchApiRabbitmqInterface {
-    async fn handle(&self, data: &[u8]) -> Result<(), SquadOvError> {
+    async fn handle(&self, data: &[u8], _queue: &str) -> Result<(), SquadOvError> {
         log::info!("Handle Twitch API Task: {}", std::str::from_utf8(data).unwrap_or("failure"));
         let task: TwitchTask = serde_json::from_slice(data)?;
         match task {

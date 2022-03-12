@@ -9,4 +9,5 @@ export TF_VAR_redshift_password=$REDSHIFT_PASSWORD
 
 
 terraform init
+terraform apply -target="module.network"
 terraform apply

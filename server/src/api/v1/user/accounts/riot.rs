@@ -50,6 +50,7 @@ pub struct RiotSummonerPathInput {
 pub struct RiotSummonerVerifyData {
     summoner_name: String,
     puuid: String,
+    platform_id: String,
 }
 
 impl api::ApiApplication {
@@ -97,8 +98,8 @@ pub async fn verify_valorant_account_ownership_handler(app : web::Data<Arc<api::
         // In this case we have the account associated - the user updated their gamename/tagline so fire off a request to resync.
         app.valorant_itf.request_riot_account_from_puuid(&account.puuid).await?;
     } else {
-        // No account!
-        return Err(SquadOvError::NotFound);
+        // No account! In this case, we want to force an unverified link to their account.
+        app.valorant_itf.request_unverified_account_link(&data.game_name, &data.tag_line, &data.puuid, path.user_id).await?;
     }
     Ok(HttpResponse::NoContent().finish())
 }
@@ -111,8 +112,8 @@ pub async fn verify_lol_summoner_ownership_handler(app : web::Data<Arc<api::ApiA
         // In this case we have the account associated - the user updated their gamename/tagline so fire off a request to resync.
         app.resync_riot_account_rso(&summoner.puuid, path.user_id).await?;
     } else {
-        // No account!
-        return Err(SquadOvError::NotFound);
+        // No account! In this case, we want to force an unverified link to their account.
+        app.lol_itf.request_unverified_summoner_link(&data.summoner_name, &data.platform_id, &data.puuid, path.user_id).await?;
     }
     Ok(HttpResponse::NoContent().finish())
 }

@@ -7,7 +7,7 @@ use squadov_common::{
 };
 use crate::api;
 use crate::api::auth::SquadOVSession;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use serde::Deserialize;
 use std::sync::Arc;
 

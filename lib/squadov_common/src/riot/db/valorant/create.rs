@@ -20,20 +20,23 @@ use uuid::Uuid;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
-async fn link_match_uuid_to_valorant_match_id(ex: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, match_id: &str) -> Result<(), SquadOvError> {
+async fn link_match_uuid_to_valorant_match_id(ex: &mut Transaction<'_, Postgres>, match_uuid: &Uuid, match_id: &str, shard: &str) -> Result<(), SquadOvError> {
     sqlx::query!(
         "
         INSERT INTO squadov.valorant_match_uuid_link (
             match_uuid,
-            match_id
+            match_id,
+            shard
         )
         VALUES (
             $1,
-            $2
+            $2,
+            $3
         )
         ",
         match_uuid,
         match_id,
+        shard,
     )
         .execute(ex)
         .await?;
@@ -684,12 +687,12 @@ pub async fn cache_valorant_player_pov_information(ex: &mut Transaction<'_, Post
     Ok(())
 }
 
-pub async fn create_or_get_match_uuid_for_valorant_match(ex: &mut Transaction<'_, Postgres>, match_id: &str) -> Result<Uuid, SquadOvError> {
+pub async fn create_or_get_match_uuid_for_valorant_match(ex: &mut Transaction<'_, Postgres>, match_id: &str, shard: &str) -> Result<Uuid, SquadOvError> {
     Ok(match super::get_valorant_match_uuid_if_exists(&mut *ex, match_id).await? {
         Some(x) => x,
         None => {
             let match_uuid = matches::create_new_match(&mut *ex, SquadOvGames::Valorant).await?;
-            link_match_uuid_to_valorant_match_id(&mut *ex, &match_uuid, match_id).await?;
+            link_match_uuid_to_valorant_match_id(&mut *ex, &match_uuid, match_id, shard).await?;
             match_uuid
         }
     })

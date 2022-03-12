@@ -1,4 +1,4 @@
-use actix_web::{web, FromRequest, HttpResponse};
+use actix_web::{web, HttpResponse};
 use actix_web::dev::{HttpServiceFactory};
 use super::auth;
 use super::v1;
@@ -7,9 +7,8 @@ use super::meta;
 use super::access;
 use super::graphql;
 use super::admin;
-use std::vec::Vec;
 use std::boxed::Box;
-use squadov_common::{AimlabTask, SquadOvError};
+use squadov_common::SquadOvError;
 
 async fn health_check() -> Result<HttpResponse, SquadOvError> {
     Ok(HttpResponse::Ok().finish())
@@ -145,6 +144,20 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                         )
                 )
                 .service(
+                    web::scope("/aws")
+                        .wrap(access::ApiAccess::new(
+                            Box::new(access::DenyShareTokenAccess{}),
+                        ))
+                        .route("/credentials", web::get().to(v1::get_aws_credentials_handler))
+                )
+                .service(
+                    web::scope("/cl")
+                        .wrap(access::ApiAccess::new(
+                            Box::new(access::DenyShareTokenAccess{}),
+                        ))
+                        .route("/config", web::get().to(v1::get_combatlog_config_handler))
+                )
+                .service(
                     web::scope("/speedcheck")
                         .service(
                             web::scope("/{file_name_uuid}")
@@ -232,11 +245,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("/username", web::post().to(v1::edit_current_user_username_handler))
                                         .route("/email", web::post().to(v1::edit_current_user_email_handler))
                                         .route("/data", web::post().to(v1::edit_current_user_profile_basic_data_handler))
-                                            .data(web::Payload::configure(|cfg| {
-                                                // Technically only need 6MB (5MB cover, 1MB profile)
-                                                // but giving us some wiggle room.
-                                                cfg.limit(10 * 1024 * 1024)
-                                            }))
+                                            .app_data(web::PayloadConfig::new(10 * 1024 * 1024))
                                         .route("/access", web::post().to(v1::edit_current_user_profile_basic_access_handler))
                                 )
                                 .service(
@@ -248,7 +257,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .route("/playtime", web::get().to(v1::get_user_recorded_playtime_handler))
                                 .route("/recent", web::post().to(v1::get_recent_matches_for_me_handler))
                                 .route("/referral", web::get().to(v1::get_user_me_referral_link_handler))
-                                .route("/squadmates", web::get().to(v1::get_user_squadmates_handler))
+                                .route("/squadmates", web::post().to(v1::get_user_squadmates_handler))
                                 .route("/changepw", web::post().to(auth::change_pw_handler))
                                 .route("/pw/verify", web::post().to(auth::verify_pw_handler))
                                 .route("/hw", web::post().to(v1::sync_user_hardware_handler))
@@ -440,7 +449,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 },
                                             }),
                                         ))
-                                        .route("/matches", web::get().to(v1::list_lol_matches_for_user_handler))
+                                        .route("/matches", web::post().to(v1::list_lol_matches_for_user_handler))
                                 )
                         )
                 )
@@ -486,7 +495,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                                 },
                                             }),
                                         ))
-                                        .route("/matches", web::get().to(v1::list_tft_matches_for_user_handler))
+                                        .route("/matches", web::post().to(v1::list_tft_matches_for_user_handler))
                                 )
                         )
                 )
@@ -553,7 +562,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                         .route("", web::post().to(v1::create_new_aimlab_task_handler))
                         .service(
                             web::scope("/user/{user_id}")
-                                .route("", web::get().to(v1::list_aimlab_matches_for_user_handler))
+                                .route("", web::post().to(v1::list_aimlab_matches_for_user_handler))
                                 .service(
                                     web::scope("/match/{match_uuid}")
                                         .wrap(access::ApiAccess::new(
@@ -580,9 +589,10 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 )
                         )
                         .route("/bulk", web::post().to(v1::bulk_create_aimlab_task_handler))
-                            .data(web::Json::<Vec<AimlabTask>>::configure(|cfg| {
-                                cfg.limit(1 * 1024 * 1024)
-                            }))
+                            .app_data(
+                                web::JsonConfig::default()
+                                    .limit(1 * 1024 * 1024)
+                            )
                 )
                 .service(
                     web::scope("/hearthstone")
@@ -602,14 +612,11 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                 .service(
                                     web::scope("/match")
                                         .route("", web::post().to(v1::create_hearthstone_match_handler))
-                                        .route("", web::get().to(v1::list_hearthstone_matches_for_user_handler))
+                                        .route("", web::post().to(v1::list_hearthstone_matches_for_user_handler))
                                         .service(
                                             web::scope("/{match_uuid}")
                                                 .route("", web::post().to(v1::upload_hearthstone_logs_handler))
-                                                    .data(web::Payload::configure(|cfg| {
-                                                        // Note that we should be submitting GZIP here so this shouldn't get super super large.
-                                                        cfg.limit(5 * 1024 * 1024)
-                                                    }))
+                                                    .app_data(web::PayloadConfig::new(5 * 1024 * 1024))
                                                 .service(
                                                     web::scope("")
                                                         .wrap(access::ApiAccess::new(
@@ -642,7 +649,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                             web::scope("/{collection_uuid}")
                                                 .route("", web::post().to(v1::add_hearthstone_card_to_arena_deck_handler))
                                                 .route("", web::get().to(v1::get_hearthstone_arena_run_handler))
-                                                .route("/matches", web::get().to(v1::list_matches_for_arena_run_handler))
+                                                .route("/matches", web::post().to(v1::list_matches_for_arena_run_handler))
                                                 .route("/deck", web::post().to(v1::create_finished_arena_draft_deck_handler))
                                         )
                                 )
@@ -652,7 +659,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .service(
                                             web::scope("/{collection_uuid}")
                                                 .route("", web::get().to(v1::get_hearthstone_duel_run_handler))
-                                                .route("/matches", web::get().to(v1::list_matches_for_duel_run_handler))
+                                                .route("/matches", web::post().to(v1::list_matches_for_duel_run_handler))
                                         )
                                 )
                         )
@@ -741,10 +748,10 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .route("", web::get().to(v1::list_wow_characters_for_user_handler))
                                         .service(
                                             web::scope("/{character_guid}")
-                                                .route("/encounters", web::get().to(v1::list_wow_encounters_for_character_handler))
-                                                .route("/challenges", web::get().to(v1::list_wow_challenges_for_character_handler))
-                                                .route("/arena", web::get().to(v1::list_wow_arenas_for_character_handler))
-                                                .route("/instance", web::get().to(v1::list_wow_instances_for_character_handler))
+                                                .route("/encounters", web::post().to(v1::list_wow_encounters_for_character_handler))
+                                                .route("/challenges", web::post().to(v1::list_wow_challenges_for_character_handler))
+                                                .route("/arena", web::post().to(v1::list_wow_arenas_for_character_handler))
+                                                .route("/instance", web::post().to(v1::list_wow_instances_for_character_handler))
                                         )
                                 )
                                 .service(
@@ -803,16 +810,13 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
                                         .service(
                                             web::scope("/{view_uuid}")
                                                 .route("", web::post().to(v1::finish_csgo_view_for_user_handler))
-                                                    .data(web::Payload::configure(|cfg| {
-                                                        // Note that we should be submitting GZIP here so this shouldn't get super super large.
-                                                        cfg.limit(5 * 1024 * 1024)
-                                                    }))
+                                                    .app_data(web::PayloadConfig::new(5 * 1024 * 1024))
                                                 .route("/demo", web::post().to(v1::associate_csgo_demo_with_view_handler))
                                         )
                                 )
                                 .service(
                                     web::scope("/match")
-                                        .route("", web::get().to(v1::list_csgo_matches_for_user_handler))
+                                        .route("", web::post().to(v1::list_csgo_matches_for_user_handler))
                                         .service(
                                             web::scope("/{match_uuid}")
                                                 .wrap(access::ApiAccess::new(

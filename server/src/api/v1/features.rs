@@ -14,6 +14,7 @@ pub struct FeatureFlags {
     allow_wow_combat_log_upload: bool,
     enable_user_profiles: bool,
     disable_sentry: bool,
+    max_bitrate_kbps: i32,
 }
 
 impl Default for FeatureFlags {
@@ -26,6 +27,7 @@ impl Default for FeatureFlags {
             allow_wow_combat_log_upload: true,
             enable_user_profiles: true,
             disable_sentry: false,
+            max_bitrate_kbps: 9000,
         }
     }
 }

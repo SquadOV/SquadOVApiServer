@@ -46,5 +46,7 @@ spec:
                       value: "1024"
                     - name: SQUADOV_DB_HEAVY_CONNECTIONS
                       value: "512"
+                    - name: "WORKERS"
+                      value: "16"
             imagePullSecrets:
                 - name: regcred

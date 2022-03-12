@@ -6,7 +6,7 @@ use crate::api;
 use crate::api::auth::SquadOVSession;
 use crate::api::v1::GenericMatchPathInput;
 use squadov_common::vod::VodAssociation;
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use std::sync::Arc;
 use serde::Serialize;
 use uuid::Uuid;

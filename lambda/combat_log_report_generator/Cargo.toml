@@ -1,0 +1,27 @@
+[package]
+name = "combat_log_report_generator"
+version = "0.1.0"
+authors = ["GRCHive, Inc. <mike@squadov.gg>"]
+edition = "2018"
+
+[dependencies]
+lambda_runtime = "0.4.1"
+tokio = { version = "1.15.0", features = ["full"] }
+serde = { version = "1.0.116", features = ["derive"] }
+serde_json = "1.0.59"
+sqlx = { version = "0.5.10", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+squadov_common = { path="../../lib/squadov_common" }
+log = "0.4.0"
+env_logger = "0.7.1"
+rusoto_core = "0.47.0"
+rusoto_secretsmanager = "0.47.0"
+futures = "0.3.13"
+base64 = "0.13.0"
+flate2 = "1.0"
+chrono = { version = "0.4.19", features = ["serde"] }
+bytes = "1.1.0"
+regex = "1.5.4"
+lazy_static = "1.4.0"
+uuid = { version = "0.8", features = ["serde", "v4"] }
+tempfile = "3.3.0"
+rusoto_s3 = "0.47.0"

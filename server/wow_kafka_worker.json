@@ -1907,72 +1907,6 @@
       ]
     }
   },
-  "378a3b827c5fbd60be6b2711ab87f3cef81d2b96dd48281f09510470b9f28efb": {
-    "query": "\n            SELECT DISTINCT\n                u.id,\n                u.username,\n                u.email,\n                u.verified,\n                u.uuid,\n                u.is_test,\n                u.is_admin,\n                u.welcome_sent,\n                u.registration_time\n            FROM squadov.users AS u\n            LEFT JOIN squadov.daily_active_sessions AS das\n                ON das.user_id = u.id\n                    AND das.tm >= (NOW() - INTERVAL '14 day')\n            LEFT JOIN squadov.user_event_record AS uer\n                ON uer.user_id = u.id\n                    AND uer.event_name = 'inactive_14'\n            WHERE uer.user_id IS NULL\n                AND das.user_id IS NULL\n            ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 1,
-          "name": "username",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 2,
-          "name": "email",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 3,
-          "name": "verified",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 4,
-          "name": "uuid",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 5,
-          "name": "is_test",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 6,
-          "name": "is_admin",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 7,
-          "name": "welcome_sent",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 8,
-          "name": "registration_time",
-          "type_info": "Timestamptz"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
   "37cb05e05f2bc313ccc27d8a51725734341ded0a1972ec432ce6a3f91974d9c6": {
     "query": "\n                SELECT\n                    wcp.unit_guid AS \"guid!\",\n                    SUM(GREATEST(whe.amount - whe.overheal, 0)) AS \"value!\"\n                FROM squadov.wow_match_view AS wmv\n                INNER JOIN squadov.wow_match_view_events AS wve\n                    ON wve.view_id = wmv.alt_id\n                INNER JOIN squadov.wow_match_view_character_presence AS wcp\n                    ON wcp.character_id = wve.source_char\n                INNER JOIN squadov.wow_match_view_healing_events AS whe\n                    ON whe.event_id = wve.event_id\n                WHERE wmv.match_uuid = $1\n                    AND wmv.user_id = $2\n                    AND wcp.unit_guid = ANY($3)\n                GROUP BY wcp.unit_guid\n                ",
     "describe": {
@@ -2158,8 +2092,8 @@
         ]
       },
       "nullable": [
-        null,
-        false
+        true,
+        true
       ]
     }
   },
@@ -3216,10 +3150,10 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -4313,6 +4247,11 @@
           "ordinal": 6,
           "name": "disable_sentry",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 7,
+          "name": "max_bitrate_kbps",
+          "type_info": "Int4"
         }
       ],
       "parameters": {
@@ -4321,6 +4260,7 @@
         ]
       },
       "nullable": [
+        false,
         false,
         false,
         false,
@@ -6620,11 +6560,11 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },

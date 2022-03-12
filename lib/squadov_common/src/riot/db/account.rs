@@ -200,15 +200,13 @@ where
 {
     Ok(sqlx::query_as!(
         RiotAccount,
-        "
-        SELECT ra.puuid, ra.game_name, ra.tag_line
+        r#"
+        SELECT ra.puuid, COALESCE(ra.game_name, ra.summoner_name) AS "game_name", COALESCE(ra.tag_line, '') AS "tag_line"
         FROM squadov.riot_accounts AS ra
         INNER JOIN squadov.riot_account_links AS ral
             ON ral.puuid = ra.puuid
         WHERE ral.user_id = $1
-            AND ra.game_name IS NOT NULL
-            AND ra.tag_line IS NOT NULL
-        ",
+        "#,
         user_id,
     )
         .fetch_all(ex)

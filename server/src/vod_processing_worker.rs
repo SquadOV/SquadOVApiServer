@@ -23,8 +23,7 @@ struct Options {
 #[tokio::main]
 pub async fn main() -> Result<(), SquadOvError> {
     std::env::set_var("RUST_BACKTRACE", "1");
-    std::env::set_var("RUST_LOG", "info,vod_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info");
-    std::env::set_var("SQLX_LOG", "0");
+    std::env::set_var("RUST_LOG", "info,vod_processing_worker=debug,actix_web=debug,actix_http=debug,librdkafka=info,rdkafka::client=info,sqlx=info");
     env_logger::init();
 
     let opts = Options::from_args();
@@ -45,7 +44,7 @@ pub async fn main() -> Result<(), SquadOvError> {
 
     // Only use the provided config to connect to things.
     let _ = tokio::task::spawn(async move {
-        let app = api::ApiApplication::new(&config).await;
+        let app = api::ApiApplication::new(&config, "vod").await;
         if let Some(vod) = opts.vod {
             app.vod_itf.process_vod(&vod, "source", None).await.unwrap();
         } else {

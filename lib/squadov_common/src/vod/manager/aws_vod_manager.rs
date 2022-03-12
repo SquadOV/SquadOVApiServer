@@ -34,7 +34,10 @@ use tokio::{
     fs::{
         File as TFile
     },
-    io::AsyncReadExt,
+    io::{
+        AsyncReadExt,
+        AsyncSeekExt,
+    },
 };
 use rusoto_credential::ProvideAwsCredentials;
 use md5::Digest;

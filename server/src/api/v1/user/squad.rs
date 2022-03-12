@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use squadov_common::{
@@ -6,14 +6,13 @@ use squadov_common::{
 };
 use std::sync::Arc;
 use serde::Deserialize;
-use serde_qs::actix::QsQuery;
 
 #[derive(Deserialize)]
 pub struct SquadmateQuery {
     pub squads: Option<Vec<i64>>,
 }
 
-pub async fn get_user_squadmates_handler(app : web::Data<Arc<api::ApiApplication>>, query: QsQuery<SquadmateQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
+pub async fn get_user_squadmates_handler(app : web::Data<Arc<api::ApiApplication>>, query: web::Json<SquadmateQuery>, req: HttpRequest) -> Result<HttpResponse, SquadOvError> {
     let extensions = req.extensions();
     let session = match extensions.get::<SquadOVSession>() {
         Some(s) => s,

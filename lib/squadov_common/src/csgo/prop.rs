@@ -26,6 +26,7 @@ use crate::proto::csgo::{
 
 const DT_MAX_STRING_BITS: usize = 9;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct CsgoPropValue {
     prop_type: CsgoPropType,

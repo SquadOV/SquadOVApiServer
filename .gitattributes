@@ -4,6 +4,7 @@
 *.lib binary
 *.dll binary
 *.o binary
+*.zip binary
 
 *.png binary
 *.ico binary

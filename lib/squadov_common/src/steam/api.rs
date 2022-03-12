@@ -57,7 +57,7 @@ impl SteamApiClient {
     }
 
     pub async fn get_player_summaries(&self, steam_ids: &[i64]) -> Result<Vec<SteamPlayerSummary>, SquadOvError> {
-        self.limiter.consume().await;
+        self.limiter.consume().await?;
 
         let mut url = self.build_url("http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002")?;
         url.query_pairs_mut().append_pair("steamids", &steam_ids.iter().map(|x| {

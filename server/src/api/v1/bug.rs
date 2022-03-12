@@ -6,13 +6,12 @@ use squadov_common::{
     },
     user::SquadOVUser,
 };
-use actix_web::{web, web::BufMut, HttpResponse, HttpRequest};
+use actix_web::{web, web::BufMut, HttpResponse, HttpRequest, HttpMessage};
 use actix_multipart::Multipart;
 use crate::api;
 use crate::api::auth::SquadOVSession;
 use std::sync::Arc;
 use futures::{StreamExt, TryStreamExt};
-use serde::{Deserialize};
 use chrono::Utc;
 
 impl api::ApiApplication {
@@ -47,25 +46,18 @@ pub async fn create_bug_report_handler(app : web::Data<Arc<api::ApiApplication>>
     let mut logs = web::BytesMut::new();
 
     while let Some(mut field) = payload.try_next().await? {
-        let content_type = field.content_disposition();
-        if content_type.is_none() {
-            return Err(SquadOvError::BadRequest);
-        }
-        let content_type = content_type.unwrap();
+        let field_name = String::from(field.content_disposition().get_name().ok_or(SquadOvError::BadRequest)?);
 
-        let field_name = content_type.get_name();
-        if field_name.is_none() {
-            return Err(SquadOvError::BadRequest);
-        }
-        let field_name = field_name.unwrap();
-        
+        let mut tmp = web::BytesMut::new();
         while let Some(Ok(chunk)) = field.next().await {
-            match field_name {
-                "title" => title.put(&*chunk),
-                "description" => description.put(&*chunk),
-                "logs" => logs.put(&*chunk),
-                _ => return Err(SquadOvError::BadRequest),
-            }
+            tmp.put(&*chunk);
+        }
+
+        match field_name.as_str() {
+            "title" => title.put(&*tmp),
+            "description" => description.put(&*tmp),
+            "logs" => logs.put(&*tmp),
+            _ => return Err(SquadOvError::BadRequest),
         }
     }
 

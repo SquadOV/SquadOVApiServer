@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, HttpRequest, web};
+use actix_web::{HttpResponse, HttpRequest, web, HttpMessage};
 use serde::{Serialize,Deserialize};
 use crate::api;
 use crate::api::fusionauth;

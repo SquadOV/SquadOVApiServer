@@ -1,5 +1,8 @@
-use nom::number::streaming::{
-    le_f32,
+use nom::{
+    IResult,
+    number::streaming::{
+        le_f32,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -42,18 +45,17 @@ impl CsgoBoundingBox {
     }
 }
 
-named!(pub parse_csgo_vector<CsgoVector>,
-    complete!(do_parse!(
-        x: le_f32 >>
-        y: le_f32 >>
-        z: le_f32 >>
-        (CsgoVector{
-            x: x,
-            y: y,
-            z: z,
-        })
-    ))
-);
+pub fn parse_csgo_vector(input: &[u8]) -> IResult<&[u8], CsgoVector> {
+    let (input, x) = le_f32(input)?;
+    let (input, y) = le_f32(input)?;
+    let (input, z) = le_f32(input)?;
+
+    Ok((input, CsgoVector{
+        x,
+        y,
+        z,
+    }))
+}
 
 #[derive(Debug)]
 pub struct CsgoQAngle {
@@ -62,15 +64,14 @@ pub struct CsgoQAngle {
     pub z: f32,
 }
 
-named!(pub parse_csgo_qangle<CsgoQAngle>,
-    complete!(do_parse!(
-        x: le_f32 >>
-        y: le_f32 >>
-        z: le_f32 >>
-        (CsgoQAngle{
-            x: x,
-            y: y,
-            z: z,
-        })
-    ))
-);
+pub fn parse_csgo_qangle(input: &[u8]) -> IResult<&[u8], CsgoQAngle> {
+    let (input, x) = le_f32(input)?;
+    let (input, y) = le_f32(input)?;
+    let (input, z) = le_f32(input)?;
+
+    Ok((input, CsgoQAngle{
+        x,
+        y,
+        z,
+    }))
+}

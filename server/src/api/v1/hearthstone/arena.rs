@@ -8,7 +8,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 use chrono::{DateTime,Utc};
 use squadov_common::hearthstone::{HearthstoneArenaRun, HearthstoneDeck};
-use serde_qs::actix::QsQuery;
 
 #[derive(Deserialize)]
 pub struct CreateHearthstoneArenaDeckInput {
@@ -234,7 +233,7 @@ pub async fn list_arena_runs_for_user_handler(data : web::Path<super::Hearthston
     Ok(HttpResponse::Ok().json(api::construct_hal_pagination_response(runs, &req, &query, expected_total == got_total)?)) 
 }
 
-pub async fn list_matches_for_arena_run_handler(data : web::Path<super::HearthstoneCollectionGetInput>, app : web::Data<Arc<api::ApiApplication>>, filters: QsQuery<super::HearthstoneListQuery>) -> Result<HttpResponse, SquadOvError> {
+pub async fn list_matches_for_arena_run_handler(data : web::Path<super::HearthstoneCollectionGetInput>, app : web::Data<Arc<api::ApiApplication>>, filters: web::Json<super::HearthstoneListQuery>) -> Result<HttpResponse, SquadOvError> {
     let matches = app.list_matches_for_arena_run(&data.collection_uuid, data.user_id, &filters).await?;
     Ok(HttpResponse::Ok().json(&matches))
 }

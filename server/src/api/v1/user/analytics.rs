@@ -14,7 +14,7 @@ use squadov_common::{
         ServerUserAddressTraits,
     },
 };
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api::{
     ApiApplication,
     auth::{

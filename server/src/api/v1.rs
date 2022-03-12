@@ -21,6 +21,8 @@ mod sentry;
 mod twitch;
 mod speed_check;
 mod discord;
+mod combat_log;
+mod aws;
 
 pub use user::*;
 pub use matches::*;
@@ -45,6 +47,8 @@ pub use profile::*;
 pub use sentry::*;
 pub use twitch::*;
 pub use discord::*;
+pub use combat_log::*;
+pub use aws::*;
 
 use serde::Serialize;
 

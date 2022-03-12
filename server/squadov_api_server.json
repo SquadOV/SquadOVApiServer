@@ -487,13 +487,13 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -2466,19 +2466,6 @@
       ]
     }
   },
-  "253a4979e5b612682bef573ba6ae34729eae5917fc93fc1294431da6bec433d7": {
-    "query": "\n            INSERT INTO squadov.deferred_rabbitmq_messages (\n                execute_time,\n                message\n            )\n            VALUES (\n                $1,\n                $2\n            )\n            ",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Timestamptz",
-          "Bytea"
-        ]
-      },
-      "nullable": []
-    }
-  },
   "2566fffb9fe2913bb94d0ab229164ad4a0889fa9455cf53822065b75bf548578": {
     "query": "\n            UPDATE squadov.squad_membership_invites\n            SET email = $1\n            WHERE invite_uuid = $2\n                AND user_id IS NULL\n            ",
     "describe": {
@@ -3266,6 +3253,20 @@
       "nullable": []
     }
   },
+  "32288c8f4ddaf1349d259ec03137f2726cbb76143a39a98920c1ec797eb514b2": {
+    "query": "\n        INSERT INTO squadov.valorant_match_uuid_link (\n            match_uuid,\n            match_id,\n            shard\n        )\n        VALUES (\n            $1,\n            $2,\n            $3\n        )\n        ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Varchar",
+          "Varchar"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "324162c4855772ef32c8f9017489c27cdaa28f145833d5e147827cc271acf466": {
     "query": "\n        SELECT ra.puuid, ra.game_name, ra.tag_line\n        FROM squadov.riot_accounts AS ra\n        INNER JOIN squadov.riot_account_links AS ral\n            ON ral.puuid = ra.puuid\n        WHERE ral.user_id = $1\n            AND ra.game_name IS NOT NULL\n            AND ra.tag_line IS NOT NULL\n        ",
     "describe": {
@@ -3645,72 +3646,6 @@
       ]
     }
   },
-  "378a3b827c5fbd60be6b2711ab87f3cef81d2b96dd48281f09510470b9f28efb": {
-    "query": "\n            SELECT DISTINCT\n                u.id,\n                u.username,\n                u.email,\n                u.verified,\n                u.uuid,\n                u.is_test,\n                u.is_admin,\n                u.welcome_sent,\n                u.registration_time\n            FROM squadov.users AS u\n            LEFT JOIN squadov.daily_active_sessions AS das\n                ON das.user_id = u.id\n                    AND das.tm >= (NOW() - INTERVAL '14 day')\n            LEFT JOIN squadov.user_event_record AS uer\n                ON uer.user_id = u.id\n                    AND uer.event_name = 'inactive_14'\n            WHERE uer.user_id IS NULL\n                AND das.user_id IS NULL\n            ",
-    "describe": {
-      "columns": [
-        {
-          "ordinal": 0,
-          "name": "id",
-          "type_info": "Int8"
-        },
-        {
-          "ordinal": 1,
-          "name": "username",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 2,
-          "name": "email",
-          "type_info": "Varchar"
-        },
-        {
-          "ordinal": 3,
-          "name": "verified",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 4,
-          "name": "uuid",
-          "type_info": "Uuid"
-        },
-        {
-          "ordinal": 5,
-          "name": "is_test",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 6,
-          "name": "is_admin",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 7,
-          "name": "welcome_sent",
-          "type_info": "Bool"
-        },
-        {
-          "ordinal": 8,
-          "name": "registration_time",
-          "type_info": "Timestamptz"
-        }
-      ],
-      "parameters": {
-        "Left": []
-      },
-      "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        true
-      ]
-    }
-  },
   "37c985e8677d3b0c198dd017fa1271c56cd2a4297ba2606af1abccfa9ad74683": {
     "query": "\n        UPDATE squadov.wow_match_view_combatants AS wvc\n        SET class_id = sub.class_id\n        FROM (\n            SELECT wve.event_id, wsc.class_id\n            FROM UNNEST($1::VARCHAR[], $2::BIGINT[], $3::BIGINT[]) AS t(guid, spell_id, view_id)\n            INNER JOIN squadov.wow_match_view AS wmv\n                ON wmv.alt_id = t.view_id\n            INNER JOIN squadov.wow_spell_to_class AS wsc\n                ON wsc.spell_id = t.spell_id\n                    AND wmv.build_version LIKE wsc.build_id  || '.%'\n            INNER JOIN squadov.wow_match_view_events AS wve\n                ON wve.view_id = wmv.alt_id\n            INNER JOIN squadov.wow_match_view_combatants AS wvc\n                ON wvc.event_id = wve.event_id\n            INNER JOIN squadov.wow_match_view_character_presence AS wcp\n                ON wcp.character_id = wvc.character_id\n                    AND wcp.view_id = wmv.id\n                    AND wcp.unit_guid = t.guid\n        ) AS sub\n        WHERE wvc.event_id = sub.event_id\n        ",
     "describe": {
@@ -3821,6 +3756,19 @@
       ]
     }
   },
+  "3af293b60b18ac60064830e0c94f1dcdf5fdbb48916f7930c7bd2314767d9503": {
+    "query": "\n                INSERT INTO squadov.deferred_rabbitmq_messages (\n                    execute_time,\n                    message\n                )\n                VALUES (\n                    $1,\n                    $2\n                )\n                ",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Left": [
+          "Timestamptz",
+          "Bytea"
+        ]
+      },
+      "nullable": []
+    }
+  },
   "3b7ac82dedfe913e40b48142952cfc7c50bf66d536b853bb88f0272d19052df6": {
     "query": "\n            SELECT mmc.match_uuid\n            FROM squadov.match_to_match_collection AS mmc\n            INNER JOIN squadov.hearthstone_duels AS had\n                ON had.collection_uuid = mmc.collection_uuid AND had.user_id = $2\n            INNER JOIN squadov.hearthstone_matches AS hm\n                ON hm.match_uuid = mmc.match_uuid\n            CROSS JOIN (\n                SELECT *\n                FROM squadov.users\n                WHERE id = $2\n            ) AS u\n            LEFT JOIN squadov.vods AS v\n                ON v.match_uuid = mmc.match_uuid\n                    AND v.user_uuid = u.uuid\n                    AND v.is_clip = FALSE\n            WHERE mmc.collection_uuid = $1\n                AND (NOT $3::BOOLEAN OR v.video_uuid IS NOT NULL)\n            ORDER BY hm.match_time DESC\n            ",
     "describe": {
@@ -3923,8 +3871,8 @@
         ]
       },
       "nullable": [
-        null,
-        false
+        true,
+        true
       ]
     }
   },
@@ -6137,10 +6085,10 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -6462,6 +6410,33 @@
         ]
       },
       "nullable": [
+        false
+      ]
+    }
+  },
+  "68af7b42b6415047528946590b10101428a135387da3df99d5f20dee911bdb23": {
+    "query": "\n            SELECT down, failover\n            FROM squadov.riot_api_outage_status\n            WHERE game = $1 AND region = $2\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "down",
+          "type_info": "Bool"
+        },
+        {
+          "ordinal": 1,
+          "name": "failover",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
+        false,
         false
       ]
     }
@@ -6836,18 +6811,18 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
         true,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -7013,11 +6988,11 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
         true,
-        null
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -7874,6 +7849,11 @@
           "ordinal": 6,
           "name": "disable_sentry",
           "type_info": "Bool"
+        },
+        {
+          "ordinal": 7,
+          "name": "max_bitrate_kbps",
+          "type_info": "Int4"
         }
       ],
       "parameters": {
@@ -7882,6 +7862,7 @@
         ]
       },
       "nullable": [
+        false,
         false,
         false,
         false,
@@ -9352,6 +9333,38 @@
       ]
     }
   },
+  "9bcc2220e9a111144abe74073d2d6573a8f96250d1391009972e5979f2066361": {
+    "query": "\n        SELECT ra.puuid, COALESCE(ra.game_name, ra.summoner_name) AS \"game_name\", COALESCE(ra.tag_line, '') AS \"tag_line\"\n        FROM squadov.riot_accounts AS ra\n        INNER JOIN squadov.riot_account_links AS ral\n            ON ral.puuid = ra.puuid\n        WHERE ral.user_id = $1\n        ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "puuid",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 1,
+          "name": "game_name",
+          "type_info": "Varchar"
+        },
+        {
+          "ordinal": 2,
+          "name": "tag_line",
+          "type_info": "Varchar"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Int8"
+        ]
+      },
+      "nullable": [
+        false,
+        null,
+        null
+      ]
+    }
+  },
   "9c745ec23350330d4bf9301227a89dd8c85ff727550c3f28860631dd790bf310": {
     "query": "\n            SELECT DISTINCT wct.talent_id, wct.is_pvp\n            FROM squadov.wow_match_view_character_presence AS wcp\n            INNER JOIN squadov.wow_match_view_combatant_talents AS wct\n                ON wct.character_id = wcp.character_id\n            WHERE wcp.view_id = $1\n                AND wcp.unit_guid = $2\n            ",
     "describe": {
@@ -10300,19 +10313,6 @@
       "nullable": []
     }
   },
-  "ae7753a944d0cd8dc373b194ed0818f31d7305a8b035e9bcfb4948d75f3cd38e": {
-    "query": "\n        INSERT INTO squadov.valorant_match_uuid_link (\n            match_uuid,\n            match_id\n        )\n        VALUES (\n            $1,\n            $2\n        )\n        ",
-    "describe": {
-      "columns": [],
-      "parameters": {
-        "Left": [
-          "Uuid",
-          "Varchar"
-        ]
-      },
-      "nullable": []
-    }
-  },
   "af1fe14fdc16722a9c8dacaa3f48e4b021b44fd25b4a64e686071c9f951e7e3b": {
     "query": "\n            SELECT COALESCE(friendly_name, id::VARCHAR) AS \"id!\"\n            FROM squadov.share_tokens\n            WHERE id = $1\n            ",
     "describe": {
@@ -11191,14 +11191,14 @@
         ]
       },
       "nullable": [
-        false,
-        false,
         true,
         true,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -13285,11 +13285,11 @@
         ]
       },
       "nullable": [
-        false,
-        false,
-        false,
-        false,
-        false
+        true,
+        true,
+        true,
+        true,
+        true
       ]
     }
   },
@@ -13917,6 +13917,27 @@
         false,
         false,
         false,
+        false
+      ]
+    }
+  },
+  "f64e9493236e420785d02f53fbee440f1456a7862df4e99dc0b8009f7d14b16e": {
+    "query": "\n            SELECT down\n            FROM squadov.riot_api_outage_status\n            WHERE game = $1 AND region = $2\n            ",
+    "describe": {
+      "columns": [
+        {
+          "ordinal": 0,
+          "name": "down",
+          "type_info": "Bool"
+        }
+      ],
+      "parameters": {
+        "Left": [
+          "Text",
+          "Text"
+        ]
+      },
+      "nullable": [
         false
       ]
     }

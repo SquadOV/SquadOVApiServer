@@ -4,7 +4,7 @@ mod twitch;
 pub use riot::*;
 pub use twitch::*;
 
-use actix_web::{web, HttpResponse, HttpRequest};
+use actix_web::{web, HttpResponse, HttpRequest, HttpMessage};
 use crate::api;
 use crate::api::auth::{SquadOVUser, SquadOVUserHandle, SquadOVSession};
 use squadov_common::{

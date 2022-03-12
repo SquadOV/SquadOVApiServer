@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-#[macro_use]
-extern crate nom;
-
 pub mod error;
 pub mod parse;
 pub mod hal;
@@ -51,6 +48,8 @@ pub mod config;
 pub mod discord;
 pub mod redis;
 pub mod zendesk;
+pub mod ff14;
+pub mod combatlog;
 
 pub use error::*;
 pub use parse::*;

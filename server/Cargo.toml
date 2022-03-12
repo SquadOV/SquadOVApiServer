@@ -5,13 +5,13 @@ authors = ["GRCHive, Inc. <mike@squadov.gg>"]
 edition = "2018"
 
 [dependencies]
-actix = "0.10"
-actix-web = "3.3.2"
-actix-multipart = "0.3.0"
-actix-rt = "1.1.1"
-actix-cors = "0.4.1"
-actix-service = "1.0.6"
-actix-web-actors = "3.0.0"
+actix = "0.13.0"
+actix-web = "4.0.1"
+actix-multipart = "0.4.0"
+actix-rt = "2.7.0"
+actix-cors = "0.6.1"
+actix-service = "2.0.2"
+actix-web-actors = "4.1.0"
 async-trait = "0.1.41"
 async-std = "1.7.0"
 serde = { version = "1.0.116", features = ["derive"] }
@@ -19,12 +19,12 @@ serde_json = "1.0.59"
 log = "0.4.0"
 env_logger = "0.7.1"
 derive_more = "0.99.11"
-reqwest = { version = "0.10", features = ["json"] }
-tokio = { version = "0.2", features = ["full"] }
+reqwest = { version = "0.11.9", features = ["json", "multipart"] }
+tokio = { version = "1.15.0", features = ["full"] }
 toml = "0.5"
 structopt = "0.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-sqlx = { path="../deps/cargo/sqlx", version = "0.4.0-beta.1", default-features = false, features = [ "bigdecimal", "runtime-async-std", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
+sqlx = { version = "0.5.10", default-features = false, features = [ "bigdecimal", "runtime-async-std-native-tls", "macros", "postgres", "json", "ipnetwork", "uuid", "chrono", "offline"] }
 futures = "0.3.13"
 futures-util = "0.3.13"
 chrono = { version = "0.4.19", features = ["serde"] }
@@ -44,18 +44,21 @@ bytes = "0.6.0"
 prost = "0.7.0"
 tempfile = "3.1.0"
 rand = "0.8.0"
-rdkafka = { version = "0.24", features = ["cmake-build", "ssl", "libz-static", "zstd"] }
+rdkafka = { version = "0.28.0", features = ["cmake-build", "ssl", "libz-static", "zstd"] }
 num_enum = "0.5.1"
-serde_qs = { version = "0.8", features = ["actix"] }
 lru = "0.6.5"
 harsh = "0.2.1"
 hmac = "0.11.0"
 petname = { path="../deps/cargo/rust-petname", version = "1.1.0" }
 convert_case = "0.4.0"
 itertools = "0.10.3"
-deadpool = "0.5.2"
-deadpool-redis = "0.5.2"
-redis = "0.15.1"
+rusoto_cognito_identity = "0.47.0"
+deadpool = "0.9.2"
+deadpool-redis = "0.10.2"
+redis = "0.21.5"
+
+[features]
+eventloop = []
 
 [[bin]]
 name = "squadov_api_server"
@@ -72,3 +75,4 @@ path = "src/vod_processing_worker.rs"
 [[bin]]
 name = "singleton_event_processing_worker"
 path = "src/singleton_event_processing_worker.rs"
+required-features = ["eventloop"]

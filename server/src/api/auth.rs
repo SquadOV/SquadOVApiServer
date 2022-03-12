@@ -23,7 +23,7 @@ use std::task::{Context, Poll};
 use std::rc::Rc;
 use std::cell::RefCell;
 use actix_service::{Service, Transform};
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, web};
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, web, HttpMessage};
 use futures::future::{ok, Ready};
 use futures::Future;
 use chrono::Utc;
@@ -38,14 +38,12 @@ pub struct ApiSessionValidator {
     pub required: bool,
 }
 
-impl<S, B> Transform<S> for ApiSessionValidator
+impl<S> Transform<S, ServiceRequest> for ApiSessionValidator
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type InitError = ();
     type Transform = ApiSessionValidatorMiddleware<S>;
@@ -53,34 +51,32 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(ApiSessionValidatorMiddleware { 
-            service: Rc::new(RefCell::new(service)),
+            rc_service: Rc::new(RefCell::new(service)),
             required: self.required,
         })
     }
 }
 
 pub struct ApiSessionValidatorMiddleware<S> {
-    service: Rc<RefCell<S>>,
+    rc_service: Rc<RefCell<S>>,
     required: bool,
 }
 
-impl<S, B> Service for ApiSessionValidatorMiddleware<S>
+impl<S> Service<ServiceRequest> for ApiSessionValidatorMiddleware<S>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
     S::Future: 'static,
-    B: 'static,
 {
-    type Request = ServiceRequest;
-    type Response = ServiceResponse<B>;
+    type Response = ServiceResponse;
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.borrow_mut().poll_ready(cx)
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.rc_service.borrow_mut().poll_ready(cx)
     }
 
-    fn call(&mut self, req: ServiceRequest) -> Self::Future {
-        let mut srv = self.service.clone();
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let srv = self.rc_service.clone();
         let required = self.required;
 
         Box::pin(async move {
@@ -156,12 +152,7 @@ where
                 return Err(actix_web::error::ErrorUnauthorized("No session found when required."));
             }
 
-            let response = match ServiceRequest::from_parts(request, payload) {
-                Ok(x) => srv.call(x).await?,
-                Err(_) => return Err(actix_web::error::ErrorInternalServerError("Failed to reconstruct service request"))
-            };
-
-            return Ok(response);
+            Ok(srv.call(ServiceRequest::from_parts(request, payload)).await?)
         })
     }
 }
