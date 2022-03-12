@@ -22,7 +22,7 @@ services:
               source: fa-config
               target: /usr/local/fusionauth/config
         environment:
-            - "DATABASE_URL=jdbc:postgresql://${POSTGRES_HOST}:5432/fusionauth?timezone=UTC"
+            - "DATABASE_URL=jdbc:postgresql://172.22.0.2:5432/fusionauth?timezone=UTC"
             - "DATABASE_ROOT_USER=${POSTGRES_USER}"
             - "DATABASE_ROOT_PASSWORD=${POSTGRES_PASSWORD}"
             - "DATABASE_USERNAME=${FUSIONAUTH_DB_USER}"
