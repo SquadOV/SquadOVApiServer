@@ -25,6 +25,12 @@ pub struct MfaLoginData {
     code: String,
 }
 
+#[derive(Deserialize)]
+pub struct GoogleLoginData{
+    #[serde(rename = "loginToken")]
+    login_token: String,
+}
+
 #[derive(Serialize)]
 struct LoginResponse {
     #[serde(rename = "userId")]
@@ -170,6 +176,17 @@ pub async fn login_handler(data : web::Json<LoginData>, app : web::Data<Arc<api:
             _ => return Err(err),
         }
     };
+    let session = app.generic_login_from_fusionauth(login_result).await?;
+    Ok(HttpResponse::Ok().json(LoginResponse{
+        user_id: session.user.id,
+        session_id: session.session_id,
+        verified: session.user.verified,
+        two_factor: None,
+    }))
+}
+
+pub async fn google_login_handler(data : web::Json<GoogleLoginData>, app : web::Data<Arc<api::ApiApplication>>) -> Result<HttpResponse, SquadOvError>{
+    let login_result = app.clients.fusionauth.google_login(&data.login_token).await?;
     let session = app.generic_login_from_fusionauth(login_result).await?;
     Ok(HttpResponse::Ok().json(LoginResponse{
         user_id: session.user.id,

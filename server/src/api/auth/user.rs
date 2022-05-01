@@ -95,6 +95,10 @@ impl UserManager {
     }
 
     pub async fn create_user(&self, user: &SquadOVUser, pool: &PgPool) -> Result<SquadOVUser, sqlx::Error> {
+        let mut username = user.username.clone();
+        if username == "" {
+            username = user.email.clone();
+        }
         return sqlx::query_as!(
             SquadOVUser,
             "
@@ -117,7 +121,7 @@ impl UserManager {
                 registration_time
             ",
             user.email,
-            user.username,
+            username,
             user.verified,
         ).fetch_one(pool).await;
     }
