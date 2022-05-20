@@ -14,7 +14,7 @@ pub struct FusionAuthConfig {
     port: u16,
     api_key: String,
     tenant_id: String,
-    application_id: String,   
+    application_id: String,
 }
 
 impl CommonConfig for FusionAuthConfig {

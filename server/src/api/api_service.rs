@@ -42,6 +42,7 @@ pub fn create_service(graphql_debug: bool) -> impl HttpServiceFactory {
             web::scope("/auth")
                 .route("/login", web::post().to(auth::login_handler))
                 .route("/login/mfa", web::post().to(auth::mfa_login_handler))
+                .route("/login/google", web::post().to(auth::google_login_handler))
                 .route("/logout", web::post().to(auth::logout_handler))
                 .route("/register", web::post().to(auth::register_handler))
                 .route("/forgotpw", web::get().to(auth::forgot_pw_handler))

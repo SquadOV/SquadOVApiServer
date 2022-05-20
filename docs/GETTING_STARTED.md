@@ -49,7 +49,7 @@ You will also need to install additional dependencies in the `deps` folder.
 8. Set `fusionauth.tenant_id`in `$SRC\config\config.toml` and `FUSIONAUTH_TENANT_ID` in `$SRC/devops/env/dev_vars.json` to the Default tenant ID.
 9. Setup a FusionAuth API key.
 
-    Copy the key and modify `FUSIONAUTH_API_KEY` in `$SRC/devops/docker/dev_env.sh` to the key value.
+    Copy the key and modify `FUSIONAUTH_API_KEY` in `$SRC/devops/env/dev_vars.json` to the key value.
     TODO: Determine minimal set of endpoint permissions.
 10. Setup an SMTP server.
 

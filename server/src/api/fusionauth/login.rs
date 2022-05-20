@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use derive_more::{Display};
 use squadov_common::SquadOvError;
+// use uuid::Uuid;
+
+// use crate::api::fusionauth::FusionAuthUser;
 
 #[derive(Serialize)]
 pub struct FusionAuthLoginInput {
@@ -14,6 +17,19 @@ pub struct FusionAuthLoginInput {
     password: String,
 }
 
+#[derive(Serialize)]
+pub struct FusionAuthGoogleLoginInput {
+    #[serde(rename = "applicationId")]
+    application_id: String,
+    #[serde(rename = "identityProviderId")]
+    identity_provider_id: String,
+    data: GoogleAuthLoginData,
+}
+
+#[derive(Serialize)]
+struct GoogleAuthLoginData {
+    token: String,
+}
 #[derive(Debug, Deserialize)]
 pub struct FusionAuthLoginResult {
     pub user: super::FusionAuthUser,
@@ -65,7 +81,7 @@ impl super::FusionAuthClient {
                 None => String::from(""),  
             },
             username: username,
-            password: password,
+            password: password
         }
     }
 
@@ -106,6 +122,24 @@ impl super::FusionAuthClient {
         match resp.status().as_u16() {
             200 | 212 | 213 => Ok(resp.json::<FusionAuthLoginResult>().await?),
             _ => Err(SquadOvError::InternalError(format!("FA MFA Login Internal Error {} - {}", resp.status().as_u16(), resp.text().await?)))
+        }
+    }
+
+    pub async fn google_login(&self, token: &str) -> Result<FusionAuthLoginResult, SquadOvError> {
+        debug!("TOKEN: {}",token.to_string());
+        let resp = self.client.post(self.build_url("/api/identity-provider/login").as_str())
+            .json(&FusionAuthGoogleLoginInput{
+                data: GoogleAuthLoginData{
+                    token: token.to_string(),
+                },
+                application_id: self.cfg.application_id.clone(),
+                identity_provider_id: "82339786-3dff-42a6-aac6-1f1ceecb6c46".to_string(),
+            })
+            .send()
+            .await?;
+        match resp.status().as_u16() {
+            200 | 212 | 213 => Ok(resp.json::<FusionAuthLoginResult>().await?),
+            _ => Err(SquadOvError::InternalError(format!("Google Login Error {} - {}", resp.status().as_u16(), resp.text().await?)))
         }
     }
 

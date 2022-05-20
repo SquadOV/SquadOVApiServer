@@ -1,2 +1,4 @@
 /target
 .vscode
+devops/env/jason.json
+devops\terraform-aws\squadov-jason
